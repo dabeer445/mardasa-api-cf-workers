@@ -1,0 +1,40 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ *
+ * Copy this file to wrangler.jsonc and fill in your values.
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "madrasa-api",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-09-27",
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "your-database-name",
+			"database_id": "your-database-id"
+		}
+	],
+	/**
+	 * Cron Triggers for scheduled reports
+	 * - Daily report: 8 PM PKT (15:00 UTC)
+	 * - Weekly report: Saturday 8 PM PKT
+	 * - Monthly report: 1st of month 8 PM PKT
+	 */
+	"triggers": {
+		"crons": [
+			"0 15 * * *",
+			"0 15 * * 6",
+			"0 15 1 * *"
+		]
+	},
+	"vars": {
+		"WHATSAPP_API_URL": "https://your-whatsapp-api.example.com",
+		"WHATSAPP_SESSION": "default"
+		// WHATSAPP_API_KEY: Set via `npx wrangler secret put WHATSAPP_API_KEY`
+	}
+}

@@ -1,12 +1,14 @@
 {
-  "name": "cloudflare-workers-openapi",
-  "version": "0.0.1",
+  "name": "madrasa-api",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "db:migrate:remote": "wrangler d1 execute madrasa-roza-tul-ilm --remote --file=./schema.sql",
+    "db:migrate:local": "wrangler d1 execute madrasa-roza-tul-ilm --local --file=./schema.sql"
   },
   "dependencies": {
     "chanfana": "^2.6.3",
@@ -16,6 +18,7 @@
   "devDependencies": {
     "@types/node": "22.13.0",
     "@types/service-worker-mock": "^2.0.4",
+    "tsx": "^4.21.0",
     "wrangler": "^4.60.0"
   }
 }
