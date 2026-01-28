@@ -1,6 +1,9 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Student, mapStudent } from "../../types";
+import { eq, sql } from "drizzle-orm";
+import { type AppContext, Student } from "../../types";
+import { createDb, students, classes } from "../../db";
+import { buildPartialUpdate } from "../../db/utils";
 
 export class StudentUpdate extends OpenAPIRoute {
   schema = {
@@ -30,6 +33,17 @@ export class StudentUpdate extends OpenAPIRoute {
           },
         },
       },
+      "400": {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: z.object({
+              success: Bool(),
+              error: Str(),
+            }),
+          },
+        },
+      },
       "404": {
         description: "Student not found",
         content: {
@@ -49,41 +63,35 @@ export class StudentUpdate extends OpenAPIRoute {
     const { id } = data.params;
     const body = data.body;
 
-    const existing = await c.env.DB.prepare('SELECT * FROM students WHERE id = ?').bind(id).first();
+    const db = createDb(c.env.DB);
+
+    const existing = await db.select().from(students).where(eq(students.id, id)).get();
     if (!existing) {
       return c.json({ success: false, error: 'Student not found' }, 404);
     }
 
-    await c.env.DB.prepare(`
-      UPDATE students SET
-        gr_number = COALESCE(?, gr_number),
-        name = COALESCE(?, name),
-        parent_name = COALESCE(?, parent_name),
-        phone = COALESCE(?, phone),
-        class_id = COALESCE(?, class_id),
-        admission_date = COALESCE(?, admission_date),
-        monthly_fee = COALESCE(?, monthly_fee),
-        status = COALESCE(?, status),
-        discount = COALESCE(?, discount),
-        updated_at = unixepoch()
-      WHERE id = ?
-    `).bind(
-      body.grNumber ?? null,
-      body.name ?? null,
-      body.parentName ?? null,
-      body.phone ?? null,
-      body.classId ?? null,
-      body.admissionDate ?? null,
-      body.monthlyFee ?? null,
-      body.status ?? null,
-      body.discount ?? null,
-      id
-    ).run();
+    // Validate class exists if provided
+    if (body.classId) {
+      const classResult = await db.select().from(classes).where(eq(classes.id, body.classId)).get();
+      if (!classResult) {
+        return c.json({ success: false, error: `Class with ID '${body.classId}' not found` }, 400);
+      }
+    }
 
-    const result = await c.env.DB.prepare('SELECT * FROM students WHERE id = ?').bind(id).first();
+    const updates = buildPartialUpdate(body, [
+      'grNumber', 'name', 'parentName', 'phone', 'classId',
+      'admissionDate', 'monthlyFee', 'status', 'discount'
+    ]);
+
+    await db
+      .update(students)
+      .set({ ...updates, updatedAt: sql`unixepoch()` })
+      .where(eq(students.id, id));
+
+    const result = await db.select().from(students).where(eq(students.id, id)).get();
     return {
       success: true,
-      result: mapStudent(result),
+      result,
     };
   }
 }

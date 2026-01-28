@@ -1,5 +1,6 @@
 import type { Env } from '../../types';
-import { mapConfig } from '../../types';
+import { createDb, config } from '../../db';
+import { eq } from 'drizzle-orm';
 import { createWhatsAppService } from '../whatsapp';
 import type { NotificationEvent, NotificationData } from './events';
 import {
@@ -27,8 +28,9 @@ export class NotificationService {
   private async getMadrassaName(): Promise<string> {
     if (this.madrassaName) return this.madrassaName;
 
-    const config = await this.env.DB.prepare('SELECT name FROM config WHERE id = 1').first();
-    this.madrassaName = config?.name as string || 'Madrassa';
+    const db = createDb(this.env.DB);
+    const configResult = await db.select({ name: config.name }).from(config).where(eq(config.id, 1)).get();
+    this.madrassaName = configResult?.name || 'Madrassa';
     return this.madrassaName;
   }
 

@@ -1,6 +1,9 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Teacher, mapTeacher } from "../../types";
+import { eq, sql } from "drizzle-orm";
+import { type AppContext, Teacher } from "../../types";
+import { createDb, teachers } from "../../db";
+import { buildPartialUpdate } from "../../db/utils";
 
 export class TeacherUpdate extends OpenAPIRoute {
   schema = {
@@ -49,23 +52,24 @@ export class TeacherUpdate extends OpenAPIRoute {
     const { id } = data.params;
     const body = data.body;
 
-    const existing = await c.env.DB.prepare('SELECT * FROM teachers WHERE id = ?').bind(id).first();
+    const db = createDb(c.env.DB);
+
+    const existing = await db.select().from(teachers).where(eq(teachers.id, id)).get();
     if (!existing) {
       return c.json({ success: false, error: 'Teacher not found' }, 404);
     }
 
-    await c.env.DB.prepare(`
-      UPDATE teachers SET
-        name = COALESCE(?, name),
-        phone = COALESCE(?, phone),
-        updated_at = unixepoch()
-      WHERE id = ?
-    `).bind(body.name ?? null, body.phone ?? null, id).run();
+    const updates = buildPartialUpdate(body, ['name', 'phone']);
 
-    const result = await c.env.DB.prepare('SELECT * FROM teachers WHERE id = ?').bind(id).first();
+    await db
+      .update(teachers)
+      .set({ ...updates, updatedAt: sql`unixepoch()` })
+      .where(eq(teachers.id, id));
+
+    const result = await db.select().from(teachers).where(eq(teachers.id, id)).get();
     return {
       success: true,
-      result: mapTeacher(result),
+      result,
     };
   }
 }

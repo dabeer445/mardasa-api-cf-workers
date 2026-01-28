@@ -1,6 +1,8 @@
-import { Bool, OpenAPIRoute } from "chanfana";
+import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, ClassRoom, generateId, mapClass } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext, ClassRoom, generateId } from "../../types";
+import { createDb, classes, teachers } from "../../db";
 
 export class ClassCreate extends OpenAPIRoute {
   schema = {
@@ -27,6 +29,17 @@ export class ClassCreate extends OpenAPIRoute {
           },
         },
       },
+      "400": {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: z.object({
+              success: Bool(),
+              error: Str(),
+            }),
+          },
+        },
+      },
     },
   };
 
@@ -35,14 +48,26 @@ export class ClassCreate extends OpenAPIRoute {
     const body = data.body;
     const id = generateId('c');
 
-    await c.env.DB.prepare(`
-      INSERT INTO classes (id, name, teacher_id) VALUES (?, ?, ?)
-    `).bind(id, body.name, body.teacherId).run();
+    const db = createDb(c.env.DB);
 
-    const result = await c.env.DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
+    // Validate teacher exists if provided
+    if (body.teacherId) {
+      const teacher = await db.select().from(teachers).where(eq(teachers.id, body.teacherId)).get();
+      if (!teacher) {
+        return c.json({ success: false, error: `Teacher with ID '${body.teacherId}' not found` }, 400);
+      }
+    }
+
+    await db.insert(classes).values({
+      id,
+      name: body.name,
+      teacherId: body.teacherId,
+    });
+
+    const result = await db.select().from(classes).where(eq(classes.id, id)).get();
     return {
       success: true,
-      result: mapClass(result),
+      result,
     };
   }
 }

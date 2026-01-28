@@ -2,6 +2,22 @@ import { Str, Num } from "chanfana";
 import type { Context } from "hono";
 import { z } from "zod";
 
+// Re-export Drizzle types for convenience
+export type {
+  Teacher as TeacherRow,
+  NewTeacher,
+  Class as ClassRow,
+  NewClass,
+  Student as StudentRow,
+  NewStudent,
+  Payment as PaymentRow,
+  NewPayment,
+  Expense as ExpenseRow,
+  NewExpense,
+  Config as ConfigRow,
+  NewConfig,
+} from './db/schema';
+
 export type Env = {
   DB: D1Database;
   WHATSAPP_API_URL?: string;
@@ -11,7 +27,7 @@ export type Env = {
 
 export type AppContext = Context<{ Bindings: Env }>;
 
-// Zod Schemas for OpenAPI
+// Zod Schemas for OpenAPI (required by chanfana)
 export const Teacher = z.object({
   id: Str(),
   name: Str({ example: "Ahmad Khan" }),
@@ -73,67 +89,7 @@ export const generateId = (prefix: string = ''): string => {
   return `${prefix}${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 };
 
-// Mappers for DB rows to API responses
-export function mapStudent(row: any) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    grNumber: row.gr_number,
-    name: row.name,
-    parentName: row.parent_name,
-    phone: row.phone,
-    classId: row.class_id,
-    admissionDate: row.admission_date,
-    monthlyFee: row.monthly_fee,
-    status: row.status,
-    discount: row.discount,
-  };
-}
-
-export function mapClass(row: any) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    name: row.name,
-    teacherId: row.teacher_id,
-  };
-}
-
-export function mapTeacher(row: any) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    name: row.name,
-    phone: row.phone ?? undefined,
-  };
-}
-
-export function mapPayment(row: any) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    studentId: row.student_id,
-    feeType: row.fee_type,
-    amount: row.amount,
-    date: row.date,
-    month: row.month ?? undefined,
-    receivedBy: row.received_by,
-    timestamp: row.timestamp,
-  };
-}
-
-export function mapExpense(row: any) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    category: row.category,
-    amount: row.amount,
-    date: row.date,
-    notes: row.notes ?? undefined,
-    timestamp: row.timestamp,
-  };
-}
-
+// Config mapper - handles JSON parsing for adminPhones
 export function mapConfig(row: any) {
   if (!row) {
     return {
@@ -141,7 +97,7 @@ export function mapConfig(row: any) {
       address: '',
       phone: '',
       adminName: 'Admin',
-      adminPhones: [],
+      adminPhones: [] as string[],
       monthlyDueDate: 10,
       annualFeeMonth: '05',
       annualFee: 0,
@@ -151,10 +107,24 @@ export function mapConfig(row: any) {
     name: row.name,
     address: row.address,
     phone: row.phone,
-    adminName: row.admin_name,
-    adminPhones: row.admin_phones ? JSON.parse(row.admin_phones) : [],
-    monthlyDueDate: row.monthly_due_date,
-    annualFeeMonth: row.annual_fee_month,
-    annualFee: row.annual_fee,
+    adminName: row.adminName ?? row.admin_name,
+    adminPhones: typeof row.adminPhones === 'string'
+      ? JSON.parse(row.adminPhones)
+      : (row.admin_phones ? JSON.parse(row.admin_phones) : []),
+    monthlyDueDate: row.monthlyDueDate ?? row.monthly_due_date,
+    annualFeeMonth: row.annualFeeMonth ?? row.annual_fee_month,
+    annualFee: row.annualFee ?? row.annual_fee,
   };
 }
+
+// Default config values
+export const DEFAULT_CONFIG = {
+  name: 'Madrassa Darul Uloom',
+  address: '',
+  phone: '',
+  adminName: 'Admin',
+  adminPhones: [] as string[],
+  monthlyDueDate: 10,
+  annualFeeMonth: '05',
+  annualFee: 0,
+};

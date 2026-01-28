@@ -1,5 +1,6 @@
 import type { Env } from "./types";
-import { mapConfig } from "./types";
+import { eq } from "drizzle-orm";
+import { createDb, config } from "./db";
 import { createWhatsAppService } from "./services/whatsapp";
 import {
   generateDailyReport,
@@ -15,10 +16,14 @@ export async function scheduled(
   env: Env,
   ctx: ExecutionContext
 ): Promise<void> {
-  const config = await env.DB.prepare('SELECT * FROM config WHERE id = 1').first();
-  const configData = mapConfig(config);
+  const db = createDb(env.DB);
+  const configResult = await db.select().from(config).where(eq(config.id, 1)).get();
 
-  if (configData.adminPhones.length === 0) {
+  const adminPhones: string[] = configResult?.adminPhones
+    ? JSON.parse(configResult.adminPhones)
+    : [];
+
+  if (adminPhones.length === 0) {
     console.log('No admin phones configured, skipping report');
     return;
   }
@@ -33,25 +38,25 @@ export async function scheduled(
   if (dayOfMonth === 1) {
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const month = lastMonth.toISOString().slice(0, 7);
-    const reportData = await generateMonthlyReport(env.DB, month);
+    const reportData = await generateMonthlyReport(db, month);
     const message = formatMonthlyReport(reportData);
-    await whatsapp.sendToMultiple(configData.adminPhones, message);
+    await whatsapp.sendToMultiple(adminPhones, message);
     console.log(`Monthly report sent for ${month}`);
     return;
   }
 
   // Weekly report on Saturday (day 6)
   if (dayOfWeek === 6) {
-    const reportData = await generateWeeklyReport(env.DB, today);
+    const reportData = await generateWeeklyReport(db, today);
     const message = formatWeeklyReport(reportData);
-    await whatsapp.sendToMultiple(configData.adminPhones, message);
+    await whatsapp.sendToMultiple(adminPhones, message);
     console.log(`Weekly report sent for week ending ${today}`);
     return;
   }
 
   // Daily report every other day
-  const reportData = await generateDailyReport(env.DB, today);
+  const reportData = await generateDailyReport(db, today);
   const message = formatDailyReport(reportData);
-  await whatsapp.sendToMultiple(configData.adminPhones, message);
+  await whatsapp.sendToMultiple(adminPhones, message);
   console.log(`Daily report sent for ${today}`);
 }

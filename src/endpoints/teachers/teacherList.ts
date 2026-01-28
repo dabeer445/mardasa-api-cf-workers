@@ -1,6 +1,8 @@
 import { Bool, Num, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Teacher, mapTeacher } from "../../types";
+import { type AppContext, Teacher } from "../../types";
+import { createDb, teachers } from "../../db";
+import { createFilter, paginate } from "../../db/utils";
 
 export class TeacherList extends OpenAPIRoute {
   schema = {
@@ -38,36 +40,21 @@ export class TeacherList extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { page, limit, search } = data.query;
 
-    // Build WHERE clauses
-    const conditions: string[] = [];
-    const params: any[] = [];
+    const db = createDb(c.env.DB);
 
-    if (search) {
-      conditions.push("name LIKE ?");
-      params.push(`%${search}%`);
-    }
+    const filter = createFilter()
+      .like(teachers.name, search)
+      .build();
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    // Get total count
-    const countQuery = `SELECT COUNT(*) as total FROM teachers ${whereClause}`;
-    const countResult = await c.env.DB.prepare(countQuery).bind(...params).first<{ total: number }>();
-    const total = countResult?.total ?? 0;
-
-    // Get paginated results
-    const offset = (page - 1) * limit;
-    const dataQuery = `SELECT * FROM teachers ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-    const { results } = await c.env.DB.prepare(dataQuery).bind(...params, limit, offset).all();
+    const { data: results, pagination } = await paginate(db, teachers,
+      { page, limit },
+      { where: filter, orderBy: teachers.createdAt, orderDirection: 'desc' }
+    );
 
     return {
       success: true,
-      result: results.map(mapTeacher),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      result: results,
+      pagination,
     };
   }
 }

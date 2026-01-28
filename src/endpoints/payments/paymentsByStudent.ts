@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Payment, mapPayment } from "../../types";
+import { eq, desc } from "drizzle-orm";
+import { type AppContext, Payment } from "../../types";
+import { createDb, payments } from "../../db";
 
 export class PaymentsByStudent extends OpenAPIRoute {
   schema = {
@@ -30,13 +32,16 @@ export class PaymentsByStudent extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { studentId } = data.params;
 
-    const { results } = await c.env.DB.prepare(
-      'SELECT * FROM payments WHERE student_id = ? ORDER BY timestamp DESC'
-    ).bind(studentId).all();
+    const db = createDb(c.env.DB);
+    const results = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.studentId, studentId))
+      .orderBy(desc(payments.timestamp));
 
     return {
       success: true,
-      result: results.map(mapPayment),
+      result: results,
     };
   }
 }

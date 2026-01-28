@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Expense, mapExpense } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext, Expense } from "../../types";
+import { createDb, expenses } from "../../db";
 
 export class ExpenseFetch extends OpenAPIRoute {
   schema = {
@@ -41,13 +43,15 @@ export class ExpenseFetch extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
 
-    const result = await c.env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
+    const db = createDb(c.env.DB);
+    const result = await db.select().from(expenses).where(eq(expenses.id, id)).get();
+
     if (!result) {
       return c.json({ success: false, error: 'Expense not found' }, 404);
     }
     return {
       success: true,
-      result: mapExpense(result),
+      result,
     };
   }
 }

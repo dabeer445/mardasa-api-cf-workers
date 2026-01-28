@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Expense, generateId, mapExpense } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext, Expense, generateId } from "../../types";
+import { createDb, expenses } from "../../db";
 
 export class ExpenseCreate extends OpenAPIRoute {
   schema = {
@@ -38,15 +40,21 @@ export class ExpenseCreate extends OpenAPIRoute {
     const id = generateId('e');
     const timestamp = body.timestamp ?? Date.now();
 
-    await c.env.DB.prepare(`
-      INSERT INTO expenses (id, category, amount, date, notes, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(id, body.category, body.amount, body.date, body.notes ?? null, timestamp).run();
+    const db = createDb(c.env.DB);
 
-    const result = await c.env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
+    await db.insert(expenses).values({
+      id,
+      category: body.category,
+      amount: body.amount,
+      date: body.date,
+      notes: body.notes ?? null,
+      timestamp,
+    });
+
+    const result = await db.select().from(expenses).where(eq(expenses.id, id)).get();
     return {
       success: true,
-      result: mapExpense(result),
+      result,
     };
   }
 }

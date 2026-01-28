@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute, Str, Num } from "chanfana";
 import { z } from "zod";
-import { type AppContext, mapConfig } from "../../types";
+import { eq, and, gte, lte, count } from "drizzle-orm";
+import { type AppContext } from "../../types";
+import { createDb, config, payments, expenses, students } from "../../db";
 import { createWhatsAppService } from "../../services/whatsapp";
 import { generateMonthlyReport, formatMonthlyReport } from "../../services/reports";
 
@@ -64,43 +66,47 @@ export class MonthlyReport extends OpenAPIRoute {
     const month = data.query.month || new Date().toISOString().slice(0, 7);
     const shouldSend = data.query.send || false;
 
+    const db = createDb(c.env.DB);
+
     // Get core report data from shared service
-    const reportData = await generateMonthlyReport(c.env.DB, month);
+    const reportData = await generateMonthlyReport(db, month);
     const message = formatMonthlyReport(reportData);
 
     // Get additional data for detailed API response
     const startDate = reportData.startDate;
     const endDate = reportData.endDate;
 
-    const { results: payments } = await c.env.DB.prepare(
-      'SELECT * FROM payments WHERE date >= ? AND date <= ?'
-    ).bind(startDate, endDate).all();
+    const paymentResults = await db.select().from(payments).where(
+      and(gte(payments.date, startDate), lte(payments.date, endDate))
+    );
 
-    const { results: expenses } = await c.env.DB.prepare(
-      'SELECT * FROM expenses WHERE date >= ? AND date <= ?'
-    ).bind(startDate, endDate).all();
+    const expenseResults = await db.select().from(expenses).where(
+      and(gte(expenses.date, startDate), lte(expenses.date, endDate))
+    );
 
-    const { results: students } = await c.env.DB.prepare(
-      "SELECT * FROM students WHERE status = 'Active'"
-    ).all();
+    const activeStudentsList = await db.select().from(students).where(
+      eq(students.status, 'Active')
+    );
 
-    const { results: totalStudentsResult } = await c.env.DB.prepare(
-      'SELECT COUNT(*) as count FROM students'
-    ).all();
+    const totalStudentsResult = await db.select({ count: count() }).from(students);
 
     // Calculate pending fees
     const pendingFees = reportData.expectedFees - reportData.collectedFees;
 
     // Group payments by type
     const paymentsByType: Record<string, number> = {};
-    payments.forEach((p: any) => {
-      paymentsByType[p.fee_type] = (paymentsByType[p.fee_type] || 0) + p.amount;
+    paymentResults.forEach((p) => {
+      if (p.feeType) {
+        paymentsByType[p.feeType] = (paymentsByType[p.feeType] || 0) + (p.amount || 0);
+      }
     });
 
     // Group expenses by category and get top 5
     const expensesByCategory: Record<string, number> = {};
-    expenses.forEach((e: any) => {
-      expensesByCategory[e.category] = (expensesByCategory[e.category] || 0) + e.amount;
+    expenseResults.forEach((e) => {
+      if (e.category) {
+        expensesByCategory[e.category] = (expensesByCategory[e.category] || 0) + (e.amount || 0);
+      }
     });
     const topExpenseCategories = Object.entries(expensesByCategory)
       .sort((a, b) => b[1] - a[1])
@@ -112,12 +118,14 @@ export class MonthlyReport extends OpenAPIRoute {
     let sendResult: { total: number; sent: number; failed: number } | undefined;
 
     if (shouldSend) {
-      const config = await c.env.DB.prepare('SELECT * FROM config WHERE id = 1').first();
-      const configData = mapConfig(config);
+      const configResult = await db.select().from(config).where(eq(config.id, 1)).get();
+      const adminPhones: string[] = configResult?.adminPhones
+        ? JSON.parse(configResult.adminPhones)
+        : [];
 
-      if (configData.adminPhones.length > 0) {
+      if (adminPhones.length > 0) {
         const whatsapp = createWhatsAppService(c.env);
-        sendResult = await whatsapp.sendToMultiple(configData.adminPhones, message);
+        sendResult = await whatsapp.sendToMultiple(adminPhones, message);
         sent = sendResult.sent > 0;
       }
     }
@@ -138,8 +146,8 @@ export class MonthlyReport extends OpenAPIRoute {
           collectionRate: reportData.feeCollectionRate,
         },
         studentStats: {
-          total: (totalStudentsResult[0] as any)?.count || 0,
-          active: students.length,
+          total: totalStudentsResult[0]?.count || 0,
+          active: activeStudentsList.length,
           newThisMonth: reportData.newStudents,
         },
         paymentsByType,

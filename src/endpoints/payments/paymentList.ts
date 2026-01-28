@@ -1,6 +1,8 @@
 import { Bool, Num, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Payment, mapPayment } from "../../types";
+import { type AppContext, Payment } from "../../types";
+import { createDb, payments } from "../../db";
+import { createFilter, paginate } from "../../db/utils";
 
 export class PaymentList extends OpenAPIRoute {
   schema = {
@@ -42,56 +44,25 @@ export class PaymentList extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { page, limit, studentId, feeType, month, fromDate, toDate } = data.query;
 
-    // Build WHERE clauses
-    const conditions: string[] = [];
-    const params: any[] = [];
+    const db = createDb(c.env.DB);
 
-    if (studentId) {
-      conditions.push("student_id = ?");
-      params.push(studentId);
-    }
+    const filter = createFilter()
+      .eq(payments.studentId, studentId)
+      .eq(payments.feeType, feeType)
+      .eq(payments.month, month)
+      .gte(payments.date, fromDate)
+      .lte(payments.date, toDate)
+      .build();
 
-    if (feeType) {
-      conditions.push("fee_type = ?");
-      params.push(feeType);
-    }
-
-    if (month) {
-      conditions.push("month = ?");
-      params.push(month);
-    }
-
-    if (fromDate) {
-      conditions.push("date >= ?");
-      params.push(fromDate);
-    }
-
-    if (toDate) {
-      conditions.push("date <= ?");
-      params.push(toDate);
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    // Get total count
-    const countQuery = `SELECT COUNT(*) as total FROM payments ${whereClause}`;
-    const countResult = await c.env.DB.prepare(countQuery).bind(...params).first<{ total: number }>();
-    const total = countResult?.total ?? 0;
-
-    // Get paginated results
-    const offset = (page - 1) * limit;
-    const dataQuery = `SELECT * FROM payments ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`;
-    const { results } = await c.env.DB.prepare(dataQuery).bind(...params, limit, offset).all();
+    const { data: results, pagination } = await paginate(db, payments,
+      { page, limit },
+      { where: filter, orderBy: payments.timestamp, orderDirection: 'desc' }
+    );
 
     return {
       success: true,
-      result: results.map(mapPayment),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      result: results,
+      pagination,
     };
   }
 }

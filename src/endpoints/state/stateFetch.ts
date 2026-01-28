@@ -1,5 +1,6 @@
 import { Bool, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import {
   type AppContext,
   Student,
@@ -8,13 +9,9 @@ import {
   Payment,
   Expense,
   MadrassaConfig,
-  mapStudent,
-  mapClass,
-  mapTeacher,
-  mapPayment,
-  mapExpense,
   mapConfig,
 } from "../../types";
+import { createDb, students, classes, teachers, payments, expenses, config } from "../../db";
 
 export class StateFetch extends OpenAPIRoute {
   schema = {
@@ -40,23 +37,23 @@ export class StateFetch extends OpenAPIRoute {
   };
 
   async handle(c: AppContext) {
-    const db = c.env.DB;
+    const db = createDb(c.env.DB);
 
-    const [students, classes, teachers, payments, expenses, configResult] = await Promise.all([
-      db.prepare('SELECT * FROM students').all(),
-      db.prepare('SELECT * FROM classes').all(),
-      db.prepare('SELECT * FROM teachers').all(),
-      db.prepare('SELECT * FROM payments').all(),
-      db.prepare('SELECT * FROM expenses').all(),
-      db.prepare('SELECT * FROM config WHERE id = 1').first(),
+    const [studentsResult, classesResult, teachersResult, paymentsResult, expensesResult, configResult] = await Promise.all([
+      db.select().from(students),
+      db.select().from(classes),
+      db.select().from(teachers),
+      db.select().from(payments),
+      db.select().from(expenses),
+      db.select().from(config).where(eq(config.id, 1)).get(),
     ]);
 
     return {
-      students: students.results.map(mapStudent),
-      classes: classes.results.map(mapClass),
-      teachers: teachers.results.map(mapTeacher),
-      payments: payments.results.map(mapPayment),
-      expenses: expenses.results.map(mapExpense),
+      students: studentsResult,
+      classes: classesResult,
+      teachers: teachersResult,
+      payments: paymentsResult,
+      expenses: expensesResult,
       config: mapConfig(configResult),
     };
   }

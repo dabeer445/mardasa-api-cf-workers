@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
+import { eq, sql } from "drizzle-orm";
 import { type AppContext } from "../../types";
+import { createDb, students, classes, teachers, payments, expenses, config } from "../../db";
 
 export class ClearAll extends OpenAPIRoute {
   schema = {
@@ -21,23 +23,30 @@ export class ClearAll extends OpenAPIRoute {
   };
 
   async handle(c: AppContext) {
-    await c.env.DB.batch([
-      c.env.DB.prepare('DELETE FROM payments'),
-      c.env.DB.prepare('DELETE FROM expenses'),
-      c.env.DB.prepare('DELETE FROM students'),
-      c.env.DB.prepare('DELETE FROM classes'),
-      c.env.DB.prepare('DELETE FROM teachers'),
-      c.env.DB.prepare(`UPDATE config SET
-        name = 'Madrassa Darul Uloom',
-        address = '',
-        phone = '',
-        admin_name = 'Admin',
-        admin_phones = '[]',
-        monthly_due_date = 10,
-        annual_fee_month = '05',
-        annual_fee = 0
-        WHERE id = 1`),
-    ]);
+    const db = createDb(c.env.DB);
+
+    // Delete all data in correct order (respecting foreign keys)
+    await db.delete(payments);
+    await db.delete(expenses);
+    await db.delete(students);
+    await db.delete(classes);
+    await db.delete(teachers);
+
+    // Reset config to defaults
+    await db
+      .update(config)
+      .set({
+        name: 'Madrassa Darul Uloom',
+        address: '',
+        phone: '',
+        adminName: 'Admin',
+        adminPhones: '[]',
+        monthlyDueDate: 10,
+        annualFeeMonth: '05',
+        annualFee: 0,
+      })
+      .where(eq(config.id, 1));
+
     return {
       success: true,
     };

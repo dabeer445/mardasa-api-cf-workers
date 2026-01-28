@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { type AppContext } from "../../types";
+import { createDb, classes } from "../../db";
 
 export class ClassDelete extends OpenAPIRoute {
   schema = {
@@ -29,7 +31,9 @@ export class ClassDelete extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
 
-    await c.env.DB.prepare('DELETE FROM classes WHERE id = ?').bind(id).run();
+    const db = createDb(c.env.DB);
+    await db.delete(classes).where(eq(classes.id, id));
+
     return {
       success: true,
     };

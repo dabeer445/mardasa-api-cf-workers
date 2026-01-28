@@ -1,6 +1,9 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Payment, mapPayment } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext, Payment } from "../../types";
+import { createDb, payments, students } from "../../db";
+import { buildPartialUpdate } from "../../db/utils";
 
 export class PaymentUpdate extends OpenAPIRoute {
   schema = {
@@ -30,6 +33,17 @@ export class PaymentUpdate extends OpenAPIRoute {
           },
         },
       },
+      "400": {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: z.object({
+              success: Bool(),
+              error: Str(),
+            }),
+          },
+        },
+      },
       "404": {
         description: "Payment not found",
         content: {
@@ -49,34 +63,34 @@ export class PaymentUpdate extends OpenAPIRoute {
     const { id } = data.params;
     const body = data.body;
 
-    const existing = await c.env.DB.prepare('SELECT * FROM payments WHERE id = ?').bind(id).first();
+    const db = createDb(c.env.DB);
+
+    const existing = await db.select().from(payments).where(eq(payments.id, id)).get();
     if (!existing) {
       return c.json({ success: false, error: 'Payment not found' }, 404);
     }
 
-    await c.env.DB.prepare(`
-      UPDATE payments SET
-        student_id = COALESCE(?, student_id),
-        fee_type = COALESCE(?, fee_type),
-        amount = COALESCE(?, amount),
-        date = COALESCE(?, date),
-        month = COALESCE(?, month),
-        received_by = COALESCE(?, received_by)
-      WHERE id = ?
-    `).bind(
-      body.studentId ?? null,
-      body.feeType ?? null,
-      body.amount ?? null,
-      body.date ?? null,
-      body.month ?? null,
-      body.receivedBy ?? null,
-      id
-    ).run();
+    // Validate student exists if updating studentId
+    if (body.studentId) {
+      const student = await db.select().from(students).where(eq(students.id, body.studentId)).get();
+      if (!student) {
+        return c.json({ success: false, error: `Student with ID '${body.studentId}' not found` }, 400);
+      }
+    }
 
-    const result = await c.env.DB.prepare('SELECT * FROM payments WHERE id = ?').bind(id).first();
+    const updates = buildPartialUpdate(body, [
+      'studentId', 'feeType', 'amount', 'date', 'month', 'receivedBy'
+    ]);
+
+    await db
+      .update(payments)
+      .set(updates)
+      .where(eq(payments.id, id));
+
+    const result = await db.select().from(payments).where(eq(payments.id, id)).get();
     return {
       success: true,
-      result: mapPayment(result),
+      result,
     };
   }
 }

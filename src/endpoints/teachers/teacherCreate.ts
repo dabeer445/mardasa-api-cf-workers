@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Teacher, generateId, mapTeacher } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext, Teacher, generateId } from "../../types";
+import { createDb, teachers } from "../../db";
 
 export class TeacherCreate extends OpenAPIRoute {
   schema = {
@@ -35,14 +37,18 @@ export class TeacherCreate extends OpenAPIRoute {
     const body = data.body;
     const id = generateId('t');
 
-    await c.env.DB.prepare(`
-      INSERT INTO teachers (id, name, phone) VALUES (?, ?, ?)
-    `).bind(id, body.name, body.phone ?? null).run();
+    const db = createDb(c.env.DB);
 
-    const result = await c.env.DB.prepare('SELECT * FROM teachers WHERE id = ?').bind(id).first();
+    await db.insert(teachers).values({
+      id,
+      name: body.name,
+      phone: body.phone ?? null,
+    });
+
+    const result = await db.select().from(teachers).where(eq(teachers.id, id)).get();
     return {
       success: true,
-      result: mapTeacher(result),
+      result,
     };
   }
 }

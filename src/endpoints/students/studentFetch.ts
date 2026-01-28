@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Student, mapStudent } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext, Student } from "../../types";
+import { createDb, students } from "../../db";
 
 export class StudentFetch extends OpenAPIRoute {
   schema = {
@@ -41,13 +43,15 @@ export class StudentFetch extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
 
-    const result = await c.env.DB.prepare('SELECT * FROM students WHERE id = ?').bind(id).first();
+    const db = createDb(c.env.DB);
+    const result = await db.select().from(students).where(eq(students.id, id)).get();
+
     if (!result) {
       return c.json({ success: false, error: 'Student not found' }, 404);
     }
     return {
       success: true,
-      result: mapStudent(result),
+      result,
     };
   }
 }

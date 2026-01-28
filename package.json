@@ -8,16 +8,21 @@
     "start": "wrangler dev",
     "cf-typegen": "wrangler types",
     "db:migrate:remote": "wrangler d1 execute madrasa-roza-tul-ilm --remote --file=./schema.sql",
-    "db:migrate:local": "wrangler d1 execute madrasa-roza-tul-ilm --local --file=./schema.sql"
+    "db:migrate:local": "wrangler d1 execute madrasa-roza-tul-ilm --local --file=./schema.sql",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "chanfana": "^2.6.3",
+    "drizzle-orm": "^0.45.1",
     "hono": "^4.6.20",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "22.13.0",
     "@types/service-worker-mock": "^2.0.4",
+    "drizzle-kit": "^0.31.8",
     "tsx": "^4.21.0",
     "wrangler": "^4.60.0"
   }

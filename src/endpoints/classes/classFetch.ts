@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, ClassRoom, mapClass } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext, ClassRoom } from "../../types";
+import { createDb, classes } from "../../db";
 
 export class ClassFetch extends OpenAPIRoute {
   schema = {
@@ -41,13 +43,15 @@ export class ClassFetch extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
 
-    const result = await c.env.DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
+    const db = createDb(c.env.DB);
+    const result = await db.select().from(classes).where(eq(classes.id, id)).get();
+
     if (!result) {
       return c.json({ success: false, error: 'Class not found' }, 404);
     }
     return {
       success: true,
-      result: mapClass(result),
+      result,
     };
   }
 }

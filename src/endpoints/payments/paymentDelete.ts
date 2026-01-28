@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { type AppContext } from "../../types";
+import { createDb, payments } from "../../db";
 
 export class PaymentDelete extends OpenAPIRoute {
   schema = {
@@ -29,7 +31,9 @@ export class PaymentDelete extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
 
-    await c.env.DB.prepare('DELETE FROM payments WHERE id = ?').bind(id).run();
+    const db = createDb(c.env.DB);
+    await db.delete(payments).where(eq(payments.id, id));
+
     return {
       success: true,
     };

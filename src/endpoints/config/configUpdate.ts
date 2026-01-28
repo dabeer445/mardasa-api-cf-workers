@@ -1,6 +1,9 @@
 import { Bool, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
+import { eq, sql } from "drizzle-orm";
 import { type AppContext, MadrassaConfig, mapConfig } from "../../types";
+import { createDb, config } from "../../db";
+import { buildPartialUpdate } from "../../db/utils";
 
 export class ConfigUpdate extends OpenAPIRoute {
   schema = {
@@ -34,30 +37,29 @@ export class ConfigUpdate extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const body = data.body;
 
-    await c.env.DB.prepare(`
-      UPDATE config SET
-        name = COALESCE(?, name),
-        address = COALESCE(?, address),
-        phone = COALESCE(?, phone),
-        admin_name = COALESCE(?, admin_name),
-        admin_phones = COALESCE(?, admin_phones),
-        monthly_due_date = COALESCE(?, monthly_due_date),
-        annual_fee_month = COALESCE(?, annual_fee_month),
-        annual_fee = COALESCE(?, annual_fee),
-        updated_at = unixepoch()
-      WHERE id = 1
-    `).bind(
-      body.name ?? null,
-      body.address ?? null,
-      body.phone ?? null,
-      body.adminName ?? null,
-      body.adminPhones ? JSON.stringify(body.adminPhones) : null,
-      body.monthlyDueDate ?? null,
-      body.annualFeeMonth ?? null,
-      body.annualFee ?? null
-    ).run();
+    const db = createDb(c.env.DB);
 
-    const result = await c.env.DB.prepare('SELECT * FROM config WHERE id = 1').first();
+    // Build partial update with allowed fields
+    const updates = buildPartialUpdate(body, [
+      'name', 'address', 'phone', 'adminName', 'adminPhones',
+      'monthlyDueDate', 'annualFeeMonth', 'annualFee'
+    ]);
+
+    // Convert adminPhones array to JSON string if provided
+    const dbUpdates: Record<string, any> = { ...updates };
+    if (updates.adminPhones !== undefined) {
+      dbUpdates.adminPhones = JSON.stringify(updates.adminPhones);
+    }
+
+    await db
+      .update(config)
+      .set({
+        ...dbUpdates,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(eq(config.id, 1));
+
+    const result = await db.select().from(config).where(eq(config.id, 1)).get();
     return {
       success: true,
       result: mapConfig(result),

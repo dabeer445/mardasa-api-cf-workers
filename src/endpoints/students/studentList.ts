@@ -1,6 +1,8 @@
 import { Bool, Num, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Student, mapStudent } from "../../types";
+import { type AppContext, Student } from "../../types";
+import { createDb, students } from "../../db";
+import { createFilter, paginate } from "../../db/utils";
 
 export class StudentList extends OpenAPIRoute {
   schema = {
@@ -40,46 +42,23 @@ export class StudentList extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { page, limit, status, classId, search } = data.query;
 
-    // Build WHERE clauses
-    const conditions: string[] = [];
-    const params: any[] = [];
+    const db = createDb(c.env.DB);
 
-    if (status) {
-      conditions.push("status = ?");
-      params.push(status);
-    }
+    const filter = createFilter()
+      .eq(students.status, status)
+      .eq(students.classId, classId)
+      .search([students.name, students.grNumber], search)
+      .build();
 
-    if (classId) {
-      conditions.push("class_id = ?");
-      params.push(classId);
-    }
-
-    if (search) {
-      conditions.push("(name LIKE ? OR gr_number LIKE ?)");
-      params.push(`%${search}%`, `%${search}%`);
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    // Get total count
-    const countQuery = `SELECT COUNT(*) as total FROM students ${whereClause}`;
-    const countResult = await c.env.DB.prepare(countQuery).bind(...params).first<{ total: number }>();
-    const total = countResult?.total ?? 0;
-
-    // Get paginated results
-    const offset = (page - 1) * limit;
-    const dataQuery = `SELECT * FROM students ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-    const { results } = await c.env.DB.prepare(dataQuery).bind(...params, limit, offset).all();
+    const { data: results, pagination } = await paginate(db, students,
+      { page, limit },
+      { where: filter, orderBy: students.createdAt, orderDirection: 'desc' }
+    );
 
     return {
       success: true,
-      result: results.map(mapStudent),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      result: results,
+      pagination,
     };
   }
 }

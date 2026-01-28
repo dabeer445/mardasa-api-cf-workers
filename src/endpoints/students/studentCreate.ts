@@ -1,6 +1,8 @@
-import { Bool, OpenAPIRoute } from "chanfana";
+import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Student, generateId, mapStudent } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext, Student, generateId } from "../../types";
+import { createDb, students, classes } from "../../db";
 import { createNotificationService } from "../../services/notifications";
 
 export class StudentCreate extends OpenAPIRoute {
@@ -28,6 +30,17 @@ export class StudentCreate extends OpenAPIRoute {
           },
         },
       },
+      "400": {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: z.object({
+              success: Bool(),
+              error: Str(),
+            }),
+          },
+        },
+      },
     },
   };
 
@@ -36,49 +49,47 @@ export class StudentCreate extends OpenAPIRoute {
     const body = data.body;
     const id = generateId('s');
 
-    await c.env.DB.prepare(`
-      INSERT INTO students (id, gr_number, name, parent_name, phone, class_id, admission_date, monthly_fee, status, discount)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      id,
-      body.grNumber,
-      body.name,
-      body.parentName,
-      body.phone,
-      body.classId,
-      body.admissionDate,
-      body.monthlyFee,
-      body.status || 'Active',
-      body.discount || 0
-    ).run();
+    const db = createDb(c.env.DB);
 
-    const result = await c.env.DB.prepare('SELECT * FROM students WHERE id = ?').bind(id).first();
-    const student = mapStudent(result);
+    // Validate class exists if provided
+    let classResult: { id: string; name: string } | undefined;
+    if (body.classId) {
+      classResult = await db.select({ id: classes.id, name: classes.name }).from(classes).where(eq(classes.id, body.classId)).get();
+      if (!classResult) {
+        return c.json({ success: false, error: `Class with ID '${body.classId}' not found` }, 400);
+      }
+    }
+
+    await db.insert(students).values({
+      id,
+      grNumber: body.grNumber,
+      name: body.name,
+      parentName: body.parentName,
+      phone: body.phone,
+      classId: body.classId,
+      admissionDate: body.admissionDate,
+      monthlyFee: body.monthlyFee,
+      status: body.status || 'Active',
+      discount: body.discount || 0,
+    });
+
+    const student = await db.select().from(students).where(eq(students.id, id)).get();
 
     // Send welcome notification in background (non-blocking)
     if (student && student.phone) {
       const notifications = createNotificationService(c.env);
 
-      // Get class name and send notification without blocking response
       c.executionCtx.waitUntil(
-        (async () => {
-          let className: string | undefined;
-          if (body.classId) {
-            const classResult = await c.env.DB.prepare('SELECT name FROM classes WHERE id = ?').bind(body.classId).first();
-            className = classResult?.name as string | undefined;
-          }
-
-          await notifications.trigger('STUDENT_CREATED', {
-            student: {
-              name: student.name,
-              grNumber: student.grNumber,
-              parentName: student.parentName,
-              phone: student.phone,
-              monthlyFee: student.monthlyFee,
-            },
-            className,
-          });
-        })()
+        notifications.trigger('STUDENT_CREATED', {
+          student: {
+            name: student.name,
+            grNumber: student.grNumber,
+            parentName: student.parentName,
+            phone: student.phone,
+            monthlyFee: student.monthlyFee,
+          },
+          className: classResult?.name,
+        })
       );
     }
 

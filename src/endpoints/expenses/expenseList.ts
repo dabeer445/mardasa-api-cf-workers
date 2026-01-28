@@ -1,6 +1,8 @@
 import { Bool, Num, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Expense, mapExpense } from "../../types";
+import { type AppContext, Expense } from "../../types";
+import { createDb, expenses } from "../../db";
+import { createFilter, paginate } from "../../db/utils";
 
 export class ExpenseList extends OpenAPIRoute {
   schema = {
@@ -41,51 +43,24 @@ export class ExpenseList extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { page, limit, category, fromDate, toDate, search } = data.query;
 
-    // Build WHERE clauses
-    const conditions: string[] = [];
-    const params: any[] = [];
+    const db = createDb(c.env.DB);
 
-    if (category) {
-      conditions.push("category = ?");
-      params.push(category);
-    }
+    const filter = createFilter()
+      .eq(expenses.category, category)
+      .gte(expenses.date, fromDate)
+      .lte(expenses.date, toDate)
+      .like(expenses.notes, search)
+      .build();
 
-    if (fromDate) {
-      conditions.push("date >= ?");
-      params.push(fromDate);
-    }
-
-    if (toDate) {
-      conditions.push("date <= ?");
-      params.push(toDate);
-    }
-
-    if (search) {
-      conditions.push("notes LIKE ?");
-      params.push(`%${search}%`);
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    // Get total count
-    const countQuery = `SELECT COUNT(*) as total FROM expenses ${whereClause}`;
-    const countResult = await c.env.DB.prepare(countQuery).bind(...params).first<{ total: number }>();
-    const total = countResult?.total ?? 0;
-
-    // Get paginated results
-    const offset = (page - 1) * limit;
-    const dataQuery = `SELECT * FROM expenses ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`;
-    const { results } = await c.env.DB.prepare(dataQuery).bind(...params, limit, offset).all();
+    const { data: results, pagination } = await paginate(db, expenses,
+      { page, limit },
+      { where: filter, orderBy: expenses.timestamp, orderDirection: 'desc' }
+    );
 
     return {
       success: true,
-      result: results.map(mapExpense),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      result: results,
+      pagination,
     };
   }
 }

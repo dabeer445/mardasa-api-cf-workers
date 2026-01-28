@@ -1,6 +1,8 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, mapConfig } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext } from "../../types";
+import { createDb, config } from "../../db";
 import { createWhatsAppService } from "../../services/whatsapp";
 import { generateDailyReport, formatDailyReport } from "../../services/reports";
 
@@ -50,19 +52,21 @@ export class DailyReport extends OpenAPIRoute {
     const date = data.query.date || new Date().toISOString().split('T')[0];
     const shouldSend = data.query.send || false;
 
-    const reportData = await generateDailyReport(c.env.DB, date);
+    const db = createDb(c.env.DB);
+    const reportData = await generateDailyReport(db, date);
     const message = formatDailyReport(reportData);
 
     let sent = false;
     let sendResult: { total: number; sent: number; failed: number } | undefined;
 
     if (shouldSend) {
-      const config = await c.env.DB.prepare('SELECT * FROM config WHERE id = 1').first();
-      const configData = mapConfig(config);
-      console.log(`Config data: ${JSON.stringify(configData)}`);
-      if (configData.adminPhones.length > 0) {
+      const configResult = await db.select().from(config).where(eq(config.id, 1)).get();
+      const adminPhones: string[] = configResult?.adminPhones
+        ? JSON.parse(configResult.adminPhones)
+        : [];
+      if (adminPhones.length > 0) {
         const whatsapp = createWhatsAppService(c.env);
-        sendResult = await whatsapp.sendToMultiple(configData.adminPhones, message);
+        sendResult = await whatsapp.sendToMultiple(adminPhones, message);
         sent = sendResult.sent > 0;
       }
     }

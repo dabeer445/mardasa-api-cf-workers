@@ -1,6 +1,9 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, ClassRoom, mapClass } from "../../types";
+import { eq, sql } from "drizzle-orm";
+import { type AppContext, ClassRoom } from "../../types";
+import { createDb, classes, teachers } from "../../db";
+import { buildPartialUpdate } from "../../db/utils";
 
 export class ClassUpdate extends OpenAPIRoute {
   schema = {
@@ -30,6 +33,17 @@ export class ClassUpdate extends OpenAPIRoute {
           },
         },
       },
+      "400": {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: z.object({
+              success: Bool(),
+              error: Str(),
+            }),
+          },
+        },
+      },
       "404": {
         description: "Class not found",
         content: {
@@ -49,23 +63,32 @@ export class ClassUpdate extends OpenAPIRoute {
     const { id } = data.params;
     const body = data.body;
 
-    const existing = await c.env.DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
+    const db = createDb(c.env.DB);
+
+    const existing = await db.select().from(classes).where(eq(classes.id, id)).get();
     if (!existing) {
       return c.json({ success: false, error: 'Class not found' }, 404);
     }
 
-    await c.env.DB.prepare(`
-      UPDATE classes SET
-        name = COALESCE(?, name),
-        teacher_id = COALESCE(?, teacher_id),
-        updated_at = unixepoch()
-      WHERE id = ?
-    `).bind(body.name ?? null, body.teacherId ?? null, id).run();
+    // Validate teacher exists if provided
+    if (body.teacherId) {
+      const teacher = await db.select().from(teachers).where(eq(teachers.id, body.teacherId)).get();
+      if (!teacher) {
+        return c.json({ success: false, error: `Teacher with ID '${body.teacherId}' not found` }, 400);
+      }
+    }
 
-    const result = await c.env.DB.prepare('SELECT * FROM classes WHERE id = ?').bind(id).first();
+    const updates = buildPartialUpdate(body, ['name', 'teacherId']);
+
+    await db
+      .update(classes)
+      .set({ ...updates, updatedAt: sql`unixepoch()` })
+      .where(eq(classes.id, id));
+
+    const result = await db.select().from(classes).where(eq(classes.id, id)).get();
     return {
       success: true,
-      result: mapClass(result),
+      result,
     };
   }
 }

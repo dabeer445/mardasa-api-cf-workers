@@ -1,6 +1,9 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Expense, mapExpense } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext, Expense } from "../../types";
+import { createDb, expenses } from "../../db";
+import { buildPartialUpdate } from "../../db/utils";
 
 export class ExpenseUpdate extends OpenAPIRoute {
   schema = {
@@ -49,30 +52,24 @@ export class ExpenseUpdate extends OpenAPIRoute {
     const { id } = data.params;
     const body = data.body;
 
-    const existing = await c.env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
+    const db = createDb(c.env.DB);
+
+    const existing = await db.select().from(expenses).where(eq(expenses.id, id)).get();
     if (!existing) {
       return c.json({ success: false, error: 'Expense not found' }, 404);
     }
 
-    await c.env.DB.prepare(`
-      UPDATE expenses SET
-        category = COALESCE(?, category),
-        amount = COALESCE(?, amount),
-        date = COALESCE(?, date),
-        notes = COALESCE(?, notes)
-      WHERE id = ?
-    `).bind(
-      body.category ?? null,
-      body.amount ?? null,
-      body.date ?? null,
-      body.notes ?? null,
-      id
-    ).run();
+    const updates = buildPartialUpdate(body, ['category', 'amount', 'date', 'notes']);
 
-    const result = await c.env.DB.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
+    await db
+      .update(expenses)
+      .set(updates)
+      .where(eq(expenses.id, id));
+
+    const result = await db.select().from(expenses).where(eq(expenses.id, id)).get();
     return {
       success: true,
-      result: mapExpense(result),
+      result,
     };
   }
 }

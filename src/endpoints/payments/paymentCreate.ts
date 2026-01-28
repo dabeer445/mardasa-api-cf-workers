@@ -1,6 +1,8 @@
-import { Bool, OpenAPIRoute } from "chanfana";
+import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { type AppContext, Payment, generateId, mapPayment } from "../../types";
+import { eq } from "drizzle-orm";
+import { type AppContext, Payment, generateId } from "../../types";
+import { createDb, payments, students } from "../../db";
 import { createNotificationService } from "../../services/notifications";
 
 export class PaymentCreate extends OpenAPIRoute {
@@ -30,6 +32,17 @@ export class PaymentCreate extends OpenAPIRoute {
           },
         },
       },
+      "400": {
+        description: "Invalid request",
+        content: {
+          "application/json": {
+            schema: z.object({
+              success: Bool(),
+              error: Str(),
+            }),
+          },
+        },
+      },
     },
   };
 
@@ -39,50 +52,45 @@ export class PaymentCreate extends OpenAPIRoute {
     const id = generateId('p');
     const timestamp = body.timestamp ?? Date.now();
 
-    await c.env.DB.prepare(`
-      INSERT INTO payments (id, student_id, fee_type, amount, date, month, received_by, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      id,
-      body.studentId,
-      body.feeType,
-      body.amount,
-      body.date,
-      body.month ?? null,
-      body.receivedBy,
-      timestamp
-    ).run();
+    const db = createDb(c.env.DB);
 
-    const result = await c.env.DB.prepare('SELECT * FROM payments WHERE id = ?').bind(id).first();
-    const payment = mapPayment(result);
+    // Validate student exists
+    const studentResult = await db.select().from(students).where(eq(students.id, body.studentId)).get();
+    if (!studentResult) {
+      return c.json({ success: false, error: `Student with ID '${body.studentId}' not found` }, 400);
+    }
+
+    await db.insert(payments).values({
+      id,
+      studentId: body.studentId,
+      feeType: body.feeType,
+      amount: body.amount,
+      date: body.date,
+      month: body.month ?? null,
+      receivedBy: body.receivedBy,
+      timestamp,
+    });
+
+    const payment = await db.select().from(payments).where(eq(payments.id, id)).get();
 
     // Send payment notification in background (non-blocking)
-    if (payment) {
+    if (payment && studentResult.phone) {
       const notifications = createNotificationService(c.env);
 
       c.executionCtx.waitUntil(
-        (async () => {
-          // Get student info for notification
-          const studentResult = await c.env.DB.prepare(
-            'SELECT name, gr_number, phone FROM students WHERE id = ?'
-          ).bind(body.studentId).first();
-
-          if (studentResult && studentResult.phone) {
-            await notifications.trigger('PAYMENT_RECEIVED', {
-              payment: {
-                amount: payment.amount,
-                feeType: payment.feeType,
-                date: payment.date,
-                month: payment.month,
-              },
-              student: {
-                name: studentResult.name as string,
-                grNumber: studentResult.gr_number as string,
-                phone: studentResult.phone as string,
-              },
-            });
-          }
-        })()
+        notifications.trigger('PAYMENT_RECEIVED', {
+          payment: {
+            amount: payment.amount,
+            feeType: payment.feeType,
+            date: payment.date,
+            month: payment.month ?? undefined,
+          },
+          student: {
+            name: studentResult.name,
+            grNumber: studentResult.grNumber,
+            phone: studentResult.phone,
+          },
+        })
       );
     }
 
