@@ -46,8 +46,14 @@ export const Student = z.object({
   name: Str({ example: "Muhammad Ali" }),
   parentName: Str({ example: "Ahmed Ali" }),
   phone: Str({ example: "03001234567" }),
+  phone2: Str({ required: false, example: "03009876543" }),
+  address: Str({ required: false, example: "123 Main Street, Karachi" }),
+  gender: z.enum(["Male", "Female"]).optional(),
+  dateOfBirth: Str({ required: false, example: "2010-05-15" }),
+  parentCnic: Str({ required: false, example: "42101-1234567-8" }),
   classId: Str(),
   admissionDate: Str({ example: "2024-01-15" }),
+  removalDate: Str({ required: false, example: "2025-06-30" }),
   monthlyFee: Num({ example: 2000 }),
   status: z.enum(["Active", "Archived"]).default("Active"),
   discount: Num({ default: 0 }),
@@ -117,6 +123,9 @@ export function mapConfig(row: any) {
   };
 }
 
+// Dues calculation starts from this date (ignore older records)
+export const DUES_START_DATE = '2023-02-01';
+
 // Default config values
 export const DEFAULT_CONFIG = {
   name: 'Madrassa Darul Uloom',
@@ -128,3 +137,91 @@ export const DEFAULT_CONFIG = {
   annualFeeMonth: '05',
   annualFee: 0,
 };
+
+// ========== Response Schemas for Aggregation Endpoints ==========
+
+// Student dues (used in defaulters report)
+export const StudentDues = z.object({
+  studentId: Str(),
+  unpaidMonths: z.array(z.string()),
+  monthlyDuesAmount: Num(),
+  annualFeeDue: z.boolean(),
+  totalDuesAmount: Num(),
+  isCurrentlyOverdue: z.boolean(),
+});
+
+// Defaulters summary
+export const DefaultersSummary = z.object({
+  totalDefaulters: Num(),
+  totalOutstandingAmount: Num(),
+  overdueCount: Num(),
+  annualDueCount: Num(),
+});
+
+// Dashboard stats
+export const DashboardStats = z.object({
+  activeStudentsCount: Num(),
+  totalStudentsCount: Num(),
+  todayCollection: Num(),
+  todayTransactionCount: Num(),
+  totalOutstandingDues: Num(),
+  newAdmissionsThisMonth: Num(),
+  defaultersCount: Num(),
+  calculatedAt: Str(),
+});
+
+// Financial summary
+export const FinancialIncome = z.object({
+  total: Num(),
+  byFeeType: z.record(z.number()),
+  transactionCount: Num(),
+});
+
+export const FinancialExpenses = z.object({
+  total: Num(),
+  byCategory: z.record(z.number()),
+  transactionCount: Num(),
+});
+
+export const FinancialSummary = z.object({
+  income: FinancialIncome,
+  expenses: FinancialExpenses,
+  netBalance: Num(),
+});
+
+// Dues by class
+export const ClassDues = z.object({
+  classId: Str(),
+  defaultersCount: Num(),
+  totalDuesAmount: Num(),
+});
+
+// Pending fees
+export const PendingFeesSummary = z.object({
+  pendingCount: Num(),
+  paidCount: Num(),
+  progressPercentage: Num(),
+});
+
+// Student payment status
+export const PaidMonthInfo = z.object({
+  paymentId: Str(),
+  amount: Num(),
+  date: Str(),
+});
+
+export const AnnualFeeStatus = z.object({
+  paid: z.boolean(),
+  paymentId: Str({ required: false }),
+  amount: Num({ required: false }),
+  date: Str({ required: false }),
+});
+
+export const StudentPaymentStatus = z.object({
+  year: Num(),
+  paidMonths: z.record(PaidMonthInfo),
+  unpaidMonths: z.array(z.string()),
+  annualFee: AnnualFeeStatus,
+  totalPaid: Num(),
+  totalDue: Num(),
+});

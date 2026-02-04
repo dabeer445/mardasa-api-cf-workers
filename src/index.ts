@@ -9,7 +9,10 @@ import { PaymentList, PaymentCreate, PaymentFetch, PaymentsByStudent, PaymentUpd
 import { ExpenseList, ExpenseCreate, ExpenseFetch, ExpenseUpdate, ExpenseDelete } from "./endpoints/expenses";
 import { ConfigFetch, ConfigUpdate } from "./endpoints/config";
 import { StateFetch, ClearAll } from "./endpoints/state";
-import { DailyReport, WeeklyReport, MonthlyReport } from "./endpoints/reports";
+import { DailyReport, WeeklyReport, MonthlyReport, DefaultersReport, FinancialSummary, DuesByClass } from "./endpoints/reports";
+import { DashboardStats } from "./endpoints/stats/dashboardStats";
+import { PendingFees } from "./endpoints/payments/pendingFees";
+import { StudentPaymentStatus } from "./endpoints/students/studentPaymentStatus";
 import { NotificationSend } from "./endpoints/notifications";
 import { scheduled } from "./scheduled";
 
@@ -46,6 +49,7 @@ openapi.delete("/api/classes/:id", ClassDelete);
 // Student routes
 openapi.get("/api/students", StudentList);
 openapi.post("/api/students", StudentCreate);
+openapi.get("/api/students/:id/payment-status", StudentPaymentStatus);
 openapi.get("/api/students/:id", StudentFetch);
 openapi.put("/api/students/:id", StudentUpdate);
 openapi.delete("/api/students/:id", StudentDelete);
@@ -53,6 +57,7 @@ openapi.delete("/api/students/:id", StudentDelete);
 // Payment routes
 openapi.get("/api/payments", PaymentList);
 openapi.post("/api/payments", PaymentCreate);
+openapi.get("/api/payments/pending", PendingFees);
 openapi.get("/api/payments/student/:studentId", PaymentsByStudent);
 openapi.get("/api/payments/:id", PaymentFetch);
 openapi.put("/api/payments/:id", PaymentUpdate);
@@ -69,10 +74,16 @@ openapi.delete("/api/expenses/:id", ExpenseDelete);
 openapi.get("/api/config", ConfigFetch);
 openapi.put("/api/config", ConfigUpdate);
 
+// Stats routes
+openapi.get("/api/stats/dashboard", DashboardStats);
+
 // Report routes
 openapi.get("/api/reports/daily", DailyReport);
 openapi.get("/api/reports/weekly", WeeklyReport);
 openapi.get("/api/reports/monthly", MonthlyReport);
+openapi.get("/api/reports/defaulters", DefaultersReport);
+openapi.get("/api/reports/financial-summary", FinancialSummary);
+openapi.get("/api/reports/dues-by-class", DuesByClass);
 
 // Notification routes
 openapi.post("/api/notifications/send", NotificationSend);

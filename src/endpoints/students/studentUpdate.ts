@@ -79,8 +79,9 @@ export class StudentUpdate extends OpenAPIRoute {
     }
 
     const updates = buildPartialUpdate(body, [
-      'grNumber', 'name', 'parentName', 'phone', 'classId',
-      'admissionDate', 'monthlyFee', 'status', 'discount'
+      'grNumber', 'name', 'parentName', 'phone', 'phone2', 'address',
+      'gender', 'dateOfBirth', 'parentCnic', 'classId', 'admissionDate',
+      'removalDate', 'monthlyFee', 'status', 'discount'
     ]);
 
     await db

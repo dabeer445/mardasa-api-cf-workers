@@ -66,8 +66,14 @@ export class StudentCreate extends OpenAPIRoute {
       name: body.name,
       parentName: body.parentName,
       phone: body.phone,
+      phone2: body.phone2 ?? null,
+      address: body.address ?? null,
+      gender: body.gender ?? null,
+      dateOfBirth: body.dateOfBirth ?? null,
+      parentCnic: body.parentCnic ?? null,
       classId: body.classId,
       admissionDate: body.admissionDate,
+      removalDate: body.removalDate ?? null,
       monthlyFee: body.monthlyFee,
       status: body.status || 'Active',
       discount: body.discount || 0,
@@ -76,22 +82,22 @@ export class StudentCreate extends OpenAPIRoute {
     const student = await db.select().from(students).where(eq(students.id, id)).get();
 
     // Send welcome notification in background (non-blocking)
-    if (student && student.phone) {
-      const notifications = createNotificationService(c.env);
+    // if (student && student.phone) {
+    //   const notifications = createNotificationService(c.env);
 
-      c.executionCtx.waitUntil(
-        notifications.trigger('STUDENT_CREATED', {
-          student: {
-            name: student.name,
-            grNumber: student.grNumber,
-            parentName: student.parentName,
-            phone: student.phone,
-            monthlyFee: student.monthlyFee,
-          },
-          className: classResult?.name,
-        })
-      );
-    }
+    //   c.executionCtx.waitUntil(
+    //     notifications.trigger('STUDENT_CREATED', {
+    //       student: {
+    //         name: student.name,
+    //         grNumber: student.grNumber,
+    //         parentName: student.parentName,
+    //         phone: student.phone,
+    //         monthlyFee: student.monthlyFee,
+    //       },
+    //       className: classResult?.name,
+    //     })
+    //   );
+    // }
 
     return {
       success: true,
