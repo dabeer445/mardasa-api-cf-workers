@@ -2,6 +2,7 @@ import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { type AppContext } from "../../types";
+import { invalidateDuesCache } from "../../services/duesCalculator";
 import { createDb, payments } from "../../db";
 
 export class PaymentDelete extends OpenAPIRoute {
@@ -33,6 +34,7 @@ export class PaymentDelete extends OpenAPIRoute {
 
     const db = createDb(c.env.DB);
     await db.delete(payments).where(eq(payments.id, id));
+    c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE));
 
     return {
       success: true,

@@ -42,7 +42,6 @@ export async function scheduled(
     const message = formatMonthlyReport(reportData);
     await whatsapp.sendToMultiple(adminPhones, message);
     console.log(`Monthly report sent for ${month}`);
-    return;
   }
 
   // Weekly report on Saturday (day 6)
@@ -51,7 +50,6 @@ export async function scheduled(
     const message = formatWeeklyReport(reportData);
     await whatsapp.sendToMultiple(adminPhones, message);
     console.log(`Weekly report sent for week ending ${today}`);
-    return;
   }
 
   // Daily report every other day

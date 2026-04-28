@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { type AppContext, Payment, generateId } from "../../types";
 import { createDb, payments, students } from "../../db";
 import { createNotificationService } from "../../services/notifications";
+import { invalidateDuesCache } from "../../services/duesCalculator";
 
 export class PaymentCreate extends OpenAPIRoute {
   schema = {
@@ -72,6 +73,7 @@ export class PaymentCreate extends OpenAPIRoute {
     });
 
     const payment = await db.select().from(payments).where(eq(payments.id, id)).get();
+    c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE));
 
     // Send payment notification in background (non-blocking)
     if (payment && studentResult.phone) {

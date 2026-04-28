@@ -1,12 +1,19 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq, and, gte, inArray } from "drizzle-orm";
-import { type AppContext, StudentDues, DefaultersSummary, mapConfig, DUES_START_DATE } from "../../types";
-import { createDb, config, payments, students } from "../../db";
+import { eq } from "drizzle-orm";
+import {
+  type AppContext,
+  StudentDues,
+  DefaultersSummary,
+  mapConfig,
+  DUES_START_DATE,
+} from "../../types";
+import { createDb, config, students } from "../../db";
 import {
   calculateAllStudentDues,
   getDefaulters,
   aggregateDuesSummary,
+  fetchDuesPayments,
 } from "../../services/duesCalculator";
 
 export class DefaultersReport extends OpenAPIRoute {
@@ -17,7 +24,8 @@ export class DefaultersReport extends OpenAPIRoute {
       query: z.object({
         asOfDate: Str({
           required: false,
-          description: "Calculate dues as of this date (YYYY-MM-DD). Defaults to today.",
+          description:
+            "Calculate dues as of this date (YYYY-MM-DD). Defaults to today.",
         }),
       }),
     },
@@ -39,50 +47,35 @@ export class DefaultersReport extends OpenAPIRoute {
 
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
-    const asOfDate = data.query.asOfDate || new Date().toISOString().slice(0, 10);
+    const asOfDate =
+      data.query.asOfDate || new Date().toISOString().slice(0, 10);
 
     const db = createDb(c.env.DB);
 
     // Fetch active students and config first
     const [activeStudents, configRow] = await Promise.all([
-      db.select({
-        id: students.id,
-        admissionDate: students.admissionDate,
-        monthlyFee: students.monthlyFee,
-        discount: students.discount,
-      }).from(students).where(eq(students.status, 'Active')),
+      db
+        .select({
+          id: students.id,
+          admissionDate: students.admissionDate,
+          monthlyFee: students.monthlyFee,
+          discount: students.discount,
+        })
+        .from(students)
+        .where(eq(students.status, "Active")),
 
       db.select().from(config).where(eq(config.id, 1)).get(),
     ]);
 
-    // Fetch only relevant payments using JOIN (avoids large IN clause):
-    // - Only for active students (via JOIN)
-    // - Only from DUES_START_DATE onwards (older payments don't affect dues)
-    // - Only Monthly and Annual fee types (Admission, Summer, Other don't affect dues calculation)
-    const relevantPayments = await db
-      .select({
-        studentId: payments.studentId,
-        feeType: payments.feeType,
-        month: payments.month,
-        date: payments.date,
-        amount: payments.amount,
-      })
-      .from(payments)
-      .innerJoin(students, eq(payments.studentId, students.id))
-      .where(
-        and(
-          eq(students.status, 'Active'),
-          gte(payments.date, DUES_START_DATE),
-          inArray(payments.feeType, ['Monthly', 'Annual'])
-        )
-      );
+    const relevantPayments = await fetchDuesPayments(db, DUES_START_DATE, c.env.CACHE);
 
     const cfg = mapConfig(configRow);
 
     // For dues calculation, start from DUES_START_DATE at earliest
-    const studentsWithAdjustedDates = activeStudents.map(s => ({
+    const studentsWithAdjustedDates = activeStudents.map((s) => ({
       ...s,
-      admissionDate: s.admissionDate < DUES_START_DATE ? DUES_START_DATE : s.admissionDate,
+      admissionDate:
+        s.admissionDate < DUES_START_DATE ? DUES_START_DATE : s.admissionDate,
     }));
 
     // Calculate dues for all active students
@@ -94,7 +87,7 @@ export class DefaultersReport extends OpenAPIRoute {
         annualFeeMonth: cfg.annualFeeMonth,
         annualFee: cfg.annualFee,
       },
-      asOfDate
+      asOfDate,
     );
 
     // Filter to only defaulters (students with unpaid months or annual fee due)

@@ -20,6 +20,7 @@ export type {
 
 export type Env = {
   DB: D1Database;
+  CACHE: KVNamespace;
   WHATSAPP_API_URL?: string;
   WHATSAPP_API_KEY?: string;
   WHATSAPP_SESSION?: string;
@@ -154,6 +155,7 @@ export const StudentDues = z.object({
 export const DefaultersSummary = z.object({
   totalDefaulters: Num(),
   totalOutstandingAmount: Num(),
+  currentMonthDues: Num(),
   overdueCount: Num(),
   annualDueCount: Num(),
 });

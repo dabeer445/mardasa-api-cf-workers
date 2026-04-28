@@ -1,11 +1,17 @@
 import { Bool, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { eq, count, like, and, gte, inArray } from "drizzle-orm";
-import { type AppContext, DashboardStats as DashboardStatsSchema, mapConfig, DUES_START_DATE } from "../../types";
+import { eq, count, like } from "drizzle-orm";
+import {
+  type AppContext,
+  DashboardStats as DashboardStatsSchema,
+  mapConfig,
+  DUES_START_DATE,
+} from "../../types";
 import { createDb, config, payments, students } from "../../db";
 import {
   calculateAllStudentDues,
   getDefaulters,
+  fetchDuesPayments,
 } from "../../services/duesCalculator";
 
 export class DashboardStats extends OpenAPIRoute {
@@ -45,62 +51,56 @@ export class DashboardStats extends OpenAPIRoute {
       db.select({ count: count() }).from(students),
 
       // Active students count
-      db.select({ count: count() }).from(students).where(eq(students.status, 'Active')),
+      db
+        .select({ count: count() })
+        .from(students)
+        .where(eq(students.status, "Active")),
 
       // Today's payments
-      db.select({
-        amount: payments.amount,
-      }).from(payments).where(eq(payments.date, today)),
+      db
+        .select({
+          amount: payments.amount,
+        })
+        .from(payments)
+        .where(eq(payments.date, today)),
 
       // New admissions this month
-      db.select({ count: count() }).from(students).where(
-        like(students.admissionDate, `${currentMonth}%`)
-      ),
+      db
+        .select({ count: count() })
+        .from(students)
+        .where(like(students.admissionDate, `${currentMonth}%`)),
 
       // Active students for dues calculation
-      db.select({
-        id: students.id,
-        admissionDate: students.admissionDate,
-        monthlyFee: students.monthlyFee,
-        discount: students.discount,
-      }).from(students).where(eq(students.status, 'Active')),
+      db
+        .select({
+          id: students.id,
+          admissionDate: students.admissionDate,
+          monthlyFee: students.monthlyFee,
+          discount: students.discount,
+        })
+        .from(students)
+        .where(eq(students.status, "Active")),
 
       // Config
       db.select().from(config).where(eq(config.id, 1)).get(),
     ]);
 
-    // Fetch only relevant payments using JOIN (avoids large IN clause):
-    // - Only for active students (via JOIN)
-    // - Only from DUES_START_DATE onwards (older payments don't affect dues)
-    // - Only Monthly and Annual fee types
-    const relevantPayments = await db
-      .select({
-        studentId: payments.studentId,
-        feeType: payments.feeType,
-        month: payments.month,
-        date: payments.date,
-        amount: payments.amount,
-      })
-      .from(payments)
-      .innerJoin(students, eq(payments.studentId, students.id))
-      .where(
-        and(
-          eq(students.status, 'Active'),
-          gte(payments.date, DUES_START_DATE),
-          inArray(payments.feeType, ['Monthly', 'Annual'])
-        )
-      );
+    const relevantPayments = await fetchDuesPayments(db, DUES_START_DATE, c.env.CACHE);
 
     const cfg = mapConfig(configRow);
 
     // Calculate today's collection
-    const todayCollection = todayPayments.reduce((sum, p) => sum + (p.amount ?? 0), 0);
+    const todayCollection = todayPayments.reduce(
+      (sum, p) => sum + (p.amount ?? 0),
+      0,
+    );
     const todayTransactionCount = todayPayments.length;
 
     // For dues calculation, start from DUES_START_DATE at earliest
-    const studentsWithAdjustedDates = activeStudentsForDues.map(s => ({
+    const studentsWithAdjustedDates = activeStudentsForDues.map((s) => ({
       ...s,
-      admissionDate: s.admissionDate < DUES_START_DATE ? DUES_START_DATE : s.admissionDate,
+      admissionDate:
+        s.admissionDate < DUES_START_DATE ? DUES_START_DATE : s.admissionDate,
     }));
 
     // Calculate dues for all active students
@@ -112,12 +112,15 @@ export class DashboardStats extends OpenAPIRoute {
         annualFeeMonth: cfg.annualFeeMonth,
         annualFee: cfg.annualFee,
       },
-      today
+      today,
     );
 
     // Get defaulters
     const defaulters = getDefaulters(allDues);
-    const totalOutstandingDues = defaulters.reduce((sum, d) => sum + d.totalDuesAmount, 0);
+    const totalOutstandingDues = defaulters.reduce(
+      (sum, d) => sum + d.totalDuesAmount,
+      0,
+    );
 
     return {
       success: true,

@@ -2,3 +2,4 @@ export { paginate, type PaginationParams, type PaginatedResult } from './paginat
 export { createFilter, FilterBuilder } from './filters';
 export { buildPartialUpdate } from './partialUpdate';
 export { parseDbError, withDbErrorHandling } from './errors';
+export { withKVCache, invalidateCache } from './cache';

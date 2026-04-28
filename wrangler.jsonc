@@ -10,6 +10,12 @@
 	"observability": {
 		"enabled": true
 	},
+	"kv_namespaces": [
+		{
+			"binding": "CACHE",
+			"id": "61aa318d9a514ef8abfd4cc0cf09b5ce"
+		}
+	],
 	"d1_databases": [
 		{
 			"binding": "DB",
@@ -25,9 +31,9 @@
 	 */
 	"triggers": {
 		"crons": [
-			"0 15 * * *",
-			"0 15 * * 6",
-			"0 15 1 * *"
+			"0 11 * * *",
+			"0 11 * * 6",
+			"0 11 1 * *"
 		]
 	},
 	"vars": {

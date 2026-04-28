@@ -1,4 +1,8 @@
+import { eq, and, gte, inArray } from 'drizzle-orm';
+import type { Database } from '../db/client';
+import { payments, students } from '../db/schema';
 import type { Student, Payment } from '../db/schema';
+import { withKVCache, invalidateCache } from '../db/utils/cache';
 
 // Types using Pick from existing Drizzle types
 type StudentForDues = Pick<Student, 'id' | 'admissionDate' | 'monthlyFee' | 'discount'>;
@@ -16,6 +20,7 @@ export interface StudentDues {
   monthlyDuesAmount: number;
   annualFeeDue: boolean;
   totalDuesAmount: number;
+  currentMonthAmount: number;
   isCurrentlyOverdue: boolean;
 }
 
@@ -127,12 +132,15 @@ export function calculateStudentDues(
   // Check if currently overdue (current month unpaid AND past due date)
   const isCurrentlyOverdue = unpaidMonths.includes(currentMonth) && currentDay > monthlyDueDate;
 
+  const currentMonthAmount = unpaidMonths.includes(currentMonth) ? netMonthlyFee : 0;
+
   return {
     studentId: student.id,
     unpaidMonths,
     monthlyDuesAmount,
     annualFeeDue,
     totalDuesAmount,
+    currentMonthAmount,
     isCurrentlyOverdue,
   };
 }
@@ -175,13 +183,50 @@ export function getDefaulters(allDues: StudentDues[]): StudentDues[] {
 export function aggregateDuesSummary(dues: StudentDues[]): {
   totalDefaulters: number;
   totalOutstandingAmount: number;
+  currentMonthDues: number;
   overdueCount: number;
   annualDueCount: number;
 } {
   return {
     totalDefaulters: dues.length,
     totalOutstandingAmount: dues.reduce((sum, d) => sum + d.totalDuesAmount, 0),
+    currentMonthDues: dues.reduce((sum, d) => sum + d.currentMonthAmount, 0),
     overdueCount: dues.filter(d => d.isCurrentlyOverdue).length,
     annualDueCount: dues.filter(d => d.annualFeeDue).length,
   };
+}
+
+const DUES_CACHE_KEY = 'dues-payments';
+const DUES_CACHE_TTL = 36000; // 10 hours (safety net; cache is invalidated on mutations)
+
+/**
+ * Fetch only payments relevant for dues calculation.
+ * Uses INNER JOIN to filter by active students at DB level (avoids large IN clauses).
+ * Also filters by duesStartDate and fee types (Monthly/Annual).
+ * Results are cached in KV for 5 minutes.
+ */
+export async function fetchDuesPayments(db: Database, duesStartDate: string, cache: KVNamespace) {
+  return withKVCache(cache, DUES_CACHE_KEY, DUES_CACHE_TTL, () =>
+    db
+      .select({
+        studentId: payments.studentId,
+        feeType: payments.feeType,
+        month: payments.month,
+        date: payments.date,
+        amount: payments.amount,
+      })
+      .from(payments)
+      .innerJoin(students, eq(payments.studentId, students.id))
+      .where(
+        and(
+          eq(students.status, 'Active'),
+          gte(payments.date, duesStartDate),
+          inArray(payments.feeType, ['Monthly', 'Annual'])
+        )
+      )
+  );
+}
+
+export async function invalidateDuesCache(cache: KVNamespace) {
+  await invalidateCache(cache, DUES_CACHE_KEY);
 }

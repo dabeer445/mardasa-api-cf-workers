@@ -2,6 +2,7 @@ import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { type AppContext, Payment } from "../../types";
+import { invalidateDuesCache } from "../../services/duesCalculator";
 import { createDb, payments, students } from "../../db";
 import { buildPartialUpdate } from "../../db/utils";
 
@@ -88,6 +89,8 @@ export class PaymentUpdate extends OpenAPIRoute {
       .where(eq(payments.id, id));
 
     const result = await db.select().from(payments).where(eq(payments.id, id)).get();
+    c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE));
+
     return {
       success: true,
       result,

@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { type AppContext, Student } from "../../types";
 import { createDb, students, classes } from "../../db";
 import { buildPartialUpdate } from "../../db/utils";
+import { invalidateDuesCache } from "../../services/duesCalculator";
 
 export class StudentUpdate extends OpenAPIRoute {
   schema = {
@@ -90,6 +91,12 @@ export class StudentUpdate extends OpenAPIRoute {
       .where(eq(students.id, id));
 
     const result = await db.select().from(students).where(eq(students.id, id)).get();
+
+    // Invalidate dues cache if status changed (affects active student list)
+    if (body.status) {
+      c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE));
+    }
+
     return {
       success: true,
       result,
