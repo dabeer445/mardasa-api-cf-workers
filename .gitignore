@@ -167,3 +167,8 @@ dist
 .wrangler/
 wrangler.jsonc
 !wrangler.jsonc.example
+
+# Raw data
+raw_data/
+
+.DS_Store
