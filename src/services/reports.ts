@@ -39,9 +39,9 @@ export interface MonthlyReportData {
   feeCollectionRate: number;
 }
 
-export async function generateDailyReport(db: Database, date: string): Promise<DailyReportData> {
-  const paymentResults = await db.select().from(payments).where(eq(payments.date, date));
-  const expenseResults = await db.select().from(expenses).where(eq(expenses.date, date));
+export async function generateDailyReport(db: Database, date: string, schoolId: number): Promise<DailyReportData> {
+  const paymentResults = await db.select().from(payments).where(and(eq(payments.date, date), eq(payments.schoolId, schoolId)));
+  const expenseResults = await db.select().from(expenses).where(and(eq(expenses.date, date), eq(expenses.schoolId, schoolId)));
 
   const totalIncome = paymentResults.reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalExpensesAmount = expenseResults.reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -72,22 +72,22 @@ export async function generateDailyReport(db: Database, date: string): Promise<D
   };
 }
 
-export async function generateWeeklyReport(db: Database, endDate: string): Promise<WeeklyReportData> {
+export async function generateWeeklyReport(db: Database, endDate: string, schoolId: number): Promise<WeeklyReportData> {
   const end = new Date(endDate);
   const start = new Date(end);
   start.setDate(start.getDate() - 6);
   const startDate = start.toISOString().split('T')[0];
 
   const paymentResults = await db.select().from(payments).where(
-    and(gte(payments.date, startDate), lte(payments.date, endDate))
+    and(eq(payments.schoolId, schoolId), gte(payments.date, startDate), lte(payments.date, endDate))
   );
 
   const expenseResults = await db.select().from(expenses).where(
-    and(gte(expenses.date, startDate), lte(expenses.date, endDate))
+    and(eq(expenses.schoolId, schoolId), gte(expenses.date, startDate), lte(expenses.date, endDate))
   );
 
   const newStudentsResult = await db.select({ count: count() }).from(students).where(
-    and(gte(students.admissionDate, startDate), lte(students.admissionDate, endDate))
+    and(eq(students.schoolId, schoolId), gte(students.admissionDate, startDate), lte(students.admissionDate, endDate))
   );
 
   const totalIncome = paymentResults.reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -118,28 +118,28 @@ export async function generateWeeklyReport(db: Database, endDate: string): Promi
   };
 }
 
-export async function generateMonthlyReport(db: Database, month: string): Promise<MonthlyReportData> {
+export async function generateMonthlyReport(db: Database, month: string, schoolId: number): Promise<MonthlyReportData> {
   const [year, monthNum] = month.split('-');
   const startDate = `${month}-01`;
   const lastDay = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
   const endDate = `${month}-${lastDay.toString().padStart(2, '0')}`;
 
   const paymentResults = await db.select().from(payments).where(
-    and(gte(payments.date, startDate), lte(payments.date, endDate))
+    and(eq(payments.schoolId, schoolId), gte(payments.date, startDate), lte(payments.date, endDate))
   );
 
   const expenseResults = await db.select().from(expenses).where(
-    and(gte(expenses.date, startDate), lte(expenses.date, endDate))
+    and(eq(expenses.schoolId, schoolId), gte(expenses.date, startDate), lte(expenses.date, endDate))
   );
 
   const newStudentsResult = await db.select({ count: count() }).from(students).where(
-    and(gte(students.admissionDate, startDate), lte(students.admissionDate, endDate))
+    and(eq(students.schoolId, schoolId), gte(students.admissionDate, startDate), lte(students.admissionDate, endDate))
   );
 
   const activeStudentsList = await db.select({
     id: students.id,
     monthlyFee: students.monthlyFee,
-  }).from(students).where(eq(students.status, 'Active'));
+  }).from(students).where(and(eq(students.status, 'Active'), eq(students.schoolId, schoolId)));
 
   const totalIncome = paymentResults.reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalExpensesAmount = expenseResults.reduce((sum, e) => sum + (e.amount || 0), 0);

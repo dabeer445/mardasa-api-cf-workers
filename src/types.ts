@@ -4,6 +4,10 @@ import { z } from "zod";
 
 // Re-export Drizzle types for convenience
 export type {
+  School as SchoolRow,
+  NewSchool,
+  User as UserRow,
+  NewUser,
   Teacher as TeacherRow,
   NewTeacher,
   Class as ClassRow,
@@ -21,12 +25,18 @@ export type {
 export type Env = {
   DB: D1Database;
   CACHE: KVNamespace;
+  JWT_SECRET: string;
   WHATSAPP_API_URL?: string;
   WHATSAPP_API_KEY?: string;
   WHATSAPP_SESSION?: string;
 };
 
-export type AppContext = Context<{ Bindings: Env }>;
+export type Variables = {
+  schoolId?: number;
+  userId: string;
+};
+
+export type AppContext = Context<{ Bindings: Env; Variables: Variables }>;
 
 // Zod Schemas for OpenAPI (required by chanfana)
 export const Teacher = z.object({
@@ -91,6 +101,23 @@ export const MadrassaConfig = z.object({
   annualFee: Num({ default: 0 }),
 });
 
+export const School = z.object({
+  id: Num(),
+  slug: Str({ example: "darul-uloom" }),
+  name: Str({ example: "Madrassa Darul Uloom" }),
+  logoUrl: Str({ required: false }),
+  address: Str({ required: false }),
+  phone: Str({ required: false }),
+  adminPhones: z.array(z.string()).default([]),
+  whatsappSessionId: Str({ required: false }),
+  whatsappToken: Str({ required: false }),
+  monthlyDueDate: Num({ default: 10 }),
+  annualFeeMonth: Str({ default: "05" }),
+  annualFee: Num({ default: 0 }),
+  subscriptionStatus: z.enum(["trial", "active", "expired", "suspended"]).default("trial"),
+  subscriptionExpiresAt: Num({ required: false }),
+});
+
 // Helper to generate IDs
 export const generateId = (prefix: string = ''): string => {
   return `${prefix}${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
@@ -121,6 +148,45 @@ export function mapConfig(row: any) {
     monthlyDueDate: row.monthlyDueDate ?? row.monthly_due_date,
     annualFeeMonth: row.annualFeeMonth ?? row.annual_fee_month,
     annualFee: row.annualFee ?? row.annual_fee,
+  };
+}
+
+export function mapSchool(row: any) {
+  if (!row) {
+    return {
+      id: '',
+      slug: '',
+      name: 'Madrassa',
+      logoUrl: null as string | null,
+      address: '',
+      phone: '',
+      adminPhones: [] as string[],
+      whatsappSessionId: null as string | null,
+      whatsappToken: null as string | null,
+      monthlyDueDate: 10,
+      annualFeeMonth: '05',
+      annualFee: 0,
+      subscriptionStatus: 'trial' as const,
+      subscriptionExpiresAt: null as number | null,
+    };
+  }
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    logoUrl: row.logoUrl ?? row.logo_url ?? null,
+    address: row.address ?? '',
+    phone: row.phone ?? '',
+    adminPhones: typeof row.adminPhones === 'string'
+      ? JSON.parse(row.adminPhones)
+      : (row.admin_phones ? JSON.parse(row.admin_phones) : []),
+    whatsappSessionId: row.whatsappSessionId ?? row.whatsapp_session_id ?? null,
+    whatsappToken: row.whatsappToken ?? row.whatsapp_token ?? null,
+    monthlyDueDate: row.monthlyDueDate ?? row.monthly_due_date ?? 10,
+    annualFeeMonth: row.annualFeeMonth ?? row.annual_fee_month ?? '05',
+    annualFee: row.annualFee ?? row.annual_fee ?? 0,
+    subscriptionStatus: row.subscriptionStatus ?? row.subscription_status ?? 'trial',
+    subscriptionExpiresAt: row.subscriptionExpiresAt ?? row.subscription_expires_at ?? null,
   };
 }
 

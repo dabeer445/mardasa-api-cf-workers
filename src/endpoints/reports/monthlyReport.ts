@@ -2,7 +2,7 @@ import { Bool, OpenAPIRoute, Str, Num } from "chanfana";
 import { z } from "zod";
 import { eq, and, gte, lte, count } from "drizzle-orm";
 import { type AppContext } from "../../types";
-import { createDb, config, payments, expenses, students } from "../../db";
+import { createDb, schools, payments, expenses, students } from "../../db";
 import { createWhatsAppService } from "../../services/whatsapp";
 import { generateMonthlyReport, formatMonthlyReport } from "../../services/reports";
 
@@ -65,11 +65,12 @@ export class MonthlyReport extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const month = data.query.month || new Date().toISOString().slice(0, 7);
     const shouldSend = data.query.send || false;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
     // Get core report data from shared service
-    const reportData = await generateMonthlyReport(db, month);
+    const reportData = await generateMonthlyReport(db, month, schoolId);
     const message = formatMonthlyReport(reportData);
 
     // Get additional data for detailed API response
@@ -77,18 +78,18 @@ export class MonthlyReport extends OpenAPIRoute {
     const endDate = reportData.endDate;
 
     const paymentResults = await db.select().from(payments).where(
-      and(gte(payments.date, startDate), lte(payments.date, endDate))
+      and(eq(payments.schoolId, schoolId), gte(payments.date, startDate), lte(payments.date, endDate))
     );
 
     const expenseResults = await db.select().from(expenses).where(
-      and(gte(expenses.date, startDate), lte(expenses.date, endDate))
+      and(eq(expenses.schoolId, schoolId), gte(expenses.date, startDate), lte(expenses.date, endDate))
     );
 
     const activeStudentsList = await db.select().from(students).where(
-      eq(students.status, 'Active')
+      and(eq(students.status, 'Active'), eq(students.schoolId, schoolId))
     );
 
-    const totalStudentsResult = await db.select({ count: count() }).from(students);
+    const totalStudentsResult = await db.select({ count: count() }).from(students).where(eq(students.schoolId, schoolId));
 
     // Calculate pending fees
     const pendingFees = reportData.expectedFees - reportData.collectedFees;
@@ -118,9 +119,9 @@ export class MonthlyReport extends OpenAPIRoute {
     let sendResult: { total: number; sent: number; failed: number } | undefined;
 
     if (shouldSend) {
-      const configResult = await db.select().from(config).where(eq(config.id, 1)).get();
-      const adminPhones: string[] = configResult?.adminPhones
-        ? JSON.parse(configResult.adminPhones)
+      const schoolRow = await db.select().from(schools).where(eq(schools.id, schoolId)).get();
+      const adminPhones: string[] = schoolRow?.adminPhones
+        ? JSON.parse(schoolRow.adminPhones)
         : [];
 
       if (adminPhones.length > 0) {

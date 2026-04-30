@@ -1,13 +1,13 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   type AppContext,
   ClassDues,
-  mapConfig,
+  mapSchool,
   DUES_START_DATE,
 } from "../../types";
-import { createDb, config, students } from "../../db";
+import { createDb, schools, students } from "../../db";
 import {
   calculateAllStudentDues,
   getDefaulters,
@@ -50,11 +50,12 @@ export class DuesByClass extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const asOfDate =
       data.query.asOfDate || new Date().toISOString().slice(0, 10);
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
-    // Fetch active students and config first
-    const [activeStudents, configRow] = await Promise.all([
+    // Fetch active students and school config in parallel
+    const [activeStudents, schoolRow] = await Promise.all([
       db
         .select({
           id: students.id,
@@ -64,14 +65,14 @@ export class DuesByClass extends OpenAPIRoute {
           discount: students.discount,
         })
         .from(students)
-        .where(eq(students.status, "Active")),
+        .where(and(eq(students.status, "Active"), eq(students.schoolId, schoolId))),
 
-      db.select().from(config).where(eq(config.id, 1)).get(),
+      db.select().from(schools).where(eq(schools.id, schoolId)).get(),
     ]);
 
-    const relevantPayments = await fetchDuesPayments(db, DUES_START_DATE, c.env.CACHE);
+    const relevantPayments = await fetchDuesPayments(db, DUES_START_DATE, c.env.CACHE, schoolId);
 
-    const cfg = mapConfig(configRow);
+    const cfg = mapSchool(schoolRow);
 
     // For dues calculation, start from DUES_START_DATE at earliest
     const studentsWithAdjustedDates = activeStudents.map((s) => ({

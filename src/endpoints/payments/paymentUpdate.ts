@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { type AppContext, Payment } from "../../types";
 import { invalidateDuesCache } from "../../services/duesCalculator";
 import { createDb, payments, students } from "../../db";
@@ -63,17 +63,18 @@ export class PaymentUpdate extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
     const body = data.body;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
-    const existing = await db.select().from(payments).where(eq(payments.id, id)).get();
+    const existing = await db.select().from(payments).where(and(eq(payments.id, id), eq(payments.schoolId, schoolId))).get();
     if (!existing) {
       return c.json({ success: false, error: 'Payment not found' }, 404);
     }
 
     // Validate student exists if updating studentId
     if (body.studentId) {
-      const student = await db.select().from(students).where(eq(students.id, body.studentId)).get();
+      const student = await db.select().from(students).where(and(eq(students.id, body.studentId), eq(students.schoolId, schoolId))).get();
       if (!student) {
         return c.json({ success: false, error: `Student with ID '${body.studentId}' not found` }, 400);
       }
@@ -86,10 +87,10 @@ export class PaymentUpdate extends OpenAPIRoute {
     await db
       .update(payments)
       .set(updates)
-      .where(eq(payments.id, id));
+      .where(and(eq(payments.id, id), eq(payments.schoolId, schoolId)));
 
-    const result = await db.select().from(payments).where(eq(payments.id, id)).get();
-    c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE));
+    const result = await db.select().from(payments).where(and(eq(payments.id, id), eq(payments.schoolId, schoolId))).get();
+    c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE, schoolId));
 
     return {
       success: true,

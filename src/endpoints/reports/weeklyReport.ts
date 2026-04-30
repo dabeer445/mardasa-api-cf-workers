@@ -2,7 +2,7 @@ import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { type AppContext } from "../../types";
-import { createDb, config } from "../../db";
+import { createDb, schools } from "../../db";
 import { createWhatsAppService } from "../../services/whatsapp";
 import { generateWeeklyReport, formatWeeklyReport } from "../../services/reports";
 
@@ -56,18 +56,19 @@ export class WeeklyReport extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const endDate = data.query.endDate || new Date().toISOString().split('T')[0];
     const shouldSend = data.query.send || false;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
-    const reportData = await generateWeeklyReport(db, endDate);
+    const reportData = await generateWeeklyReport(db, endDate, schoolId);
     const message = formatWeeklyReport(reportData);
 
     let sent = false;
     let sendResult: { total: number; sent: number; failed: number } | undefined;
 
     if (shouldSend) {
-      const configResult = await db.select().from(config).where(eq(config.id, 1)).get();
-      const adminPhones: string[] = configResult?.adminPhones
-        ? JSON.parse(configResult.adminPhones)
+      const schoolRow = await db.select().from(schools).where(eq(schools.id, schoolId)).get();
+      const adminPhones: string[] = schoolRow?.adminPhones
+        ? JSON.parse(schoolRow.adminPhones)
         : [];
 
       if (adminPhones.length > 0) {

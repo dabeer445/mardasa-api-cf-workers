@@ -39,11 +39,13 @@ export class ExpenseCreate extends OpenAPIRoute {
     const body = data.body;
     const id = generateId('e');
     const timestamp = body.timestamp ?? Date.now();
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
     await db.insert(expenses).values({
       id,
+      schoolId,
       category: body.category,
       amount: body.amount,
       date: body.date,

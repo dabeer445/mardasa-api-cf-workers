@@ -1,6 +1,5 @@
 import type { Env } from "./types";
-import { eq } from "drizzle-orm";
-import { createDb, config } from "./db";
+import { createDb, schools } from "./db";
 import { createWhatsAppService } from "./services/whatsapp";
 import {
   generateDailyReport,
@@ -12,49 +11,50 @@ import {
 } from "./services/reports";
 
 export async function scheduled(
-  event: ScheduledEvent,
+  _event: ScheduledEvent,
   env: Env,
-  ctx: ExecutionContext
+  _ctx: ExecutionContext
 ): Promise<void> {
   const db = createDb(env.DB);
-  const configResult = await db.select().from(config).where(eq(config.id, 1)).get();
+  const allSchools = await db.select().from(schools);
 
-  const adminPhones: string[] = configResult?.adminPhones
-    ? JSON.parse(configResult.adminPhones)
-    : [];
-
-  if (adminPhones.length === 0) {
-    console.log('No admin phones configured, skipping report');
+  if (allSchools.length === 0) {
+    console.log('No schools found, skipping report');
     return;
   }
 
   const whatsapp = createWhatsAppService(env);
   const now = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = now.toISOString().split('T')[0]!;
   const dayOfWeek = now.getUTCDay();
   const dayOfMonth = now.getUTCDate();
 
-  // Monthly report on 1st of month (for previous month)
-  if (dayOfMonth === 1) {
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const month = lastMonth.toISOString().slice(0, 7);
-    const reportData = await generateMonthlyReport(db, month);
-    const message = formatMonthlyReport(reportData);
-    await whatsapp.sendToMultiple(adminPhones, message);
-    console.log(`Monthly report sent for ${month}`);
-  }
+  for (const school of allSchools) {
+    const adminPhones: string[] = school.adminPhones ? JSON.parse(school.adminPhones) : [];
+    if (adminPhones.length === 0) continue;
 
-  // Weekly report on Saturday (day 6)
-  if (dayOfWeek === 6) {
-    const reportData = await generateWeeklyReport(db, today);
-    const message = formatWeeklyReport(reportData);
-    await whatsapp.sendToMultiple(adminPhones, message);
-    console.log(`Weekly report sent for week ending ${today}`);
-  }
+    // Monthly report on 1st of month (for previous month)
+    if (dayOfMonth === 1) {
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const month = lastMonth.toISOString().slice(0, 7);
+      const reportData = await generateMonthlyReport(db, month, school.id);
+      const message = formatMonthlyReport(reportData);
+      await whatsapp.sendToMultiple(adminPhones, message);
+      console.log(`Monthly report sent for ${school.slug} ${month}`);
+    }
 
-  // Daily report every other day
-  const reportData = await generateDailyReport(db, today);
-  const message = formatDailyReport(reportData);
-  await whatsapp.sendToMultiple(adminPhones, message);
-  console.log(`Daily report sent for ${today}`);
+    // Weekly report on Saturday (day 6)
+    if (dayOfWeek === 6) {
+      const reportData = await generateWeeklyReport(db, today, school.id);
+      const message = formatWeeklyReport(reportData);
+      await whatsapp.sendToMultiple(adminPhones, message);
+      console.log(`Weekly report sent for ${school.slug} week ending ${today}`);
+    }
+
+    // Daily report every day
+    const reportData = await generateDailyReport(db, today, school.id);
+    const message = formatDailyReport(reportData);
+    await whatsapp.sendToMultiple(adminPhones, message);
+    console.log(`Daily report sent for ${school.slug} ${today}`);
+  }
 }

@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { type AppContext } from "../../types";
 import { invalidateDuesCache } from "../../services/duesCalculator";
 import { createDb, payments } from "../../db";
@@ -31,10 +31,11 @@ export class PaymentDelete extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
-    await db.delete(payments).where(eq(payments.id, id));
-    c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE));
+    await db.delete(payments).where(and(eq(payments.id, id), eq(payments.schoolId, schoolId)));
+    c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE, schoolId));
 
     return {
       success: true,

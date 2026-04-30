@@ -24,6 +24,7 @@
     "@types/service-worker-mock": "^2.0.4",
     "drizzle-kit": "^0.31.8",
     "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
     "wrangler": "^4.60.0"
   }
 }

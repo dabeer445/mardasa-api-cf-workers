@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { type AppContext, Expense } from "../../types";
 import { createDb, expenses } from "../../db";
 
@@ -42,9 +42,10 @@ export class ExpenseFetch extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
-    const result = await db.select().from(expenses).where(eq(expenses.id, id)).get();
+    const result = await db.select().from(expenses).where(and(eq(expenses.id, id), eq(expenses.schoolId, schoolId))).get();
 
     if (!result) {
       return c.json({ success: false, error: 'Expense not found' }, 404);

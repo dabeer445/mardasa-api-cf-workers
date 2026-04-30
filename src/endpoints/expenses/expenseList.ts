@@ -42,10 +42,12 @@ export class ExpenseList extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { page, limit, category, fromDate, toDate, search } = data.query;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
     const filter = createFilter()
+      .eq(expenses.schoolId, schoolId)
       .eq(expenses.category, category)
       .gte(expenses.date, fromDate)
       .lte(expenses.date, toDate)

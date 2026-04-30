@@ -1,30 +1,66 @@
-import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
-// Teachers table
-export const teachers = sqliteTable('teachers', {
-  id: text('id').primaryKey(),
+export const schools = sqliteTable('schools', {
+  id: integer('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
-  phone: text('phone'),
+  logoUrl: text('logo_url'),
+  address: text('address').default(''),
+  phone: text('phone').default(''),
+  adminPhones: text('admin_phones').default('[]'),
+  whatsappSessionId: text('whatsapp_session_id'),
+  whatsappToken: text('whatsapp_token'),
+  monthlyDueDate: integer('monthly_due_date').default(10),
+  annualFeeMonth: text('annual_fee_month', {
+    enum: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'],
+  }).default('05'),
+  annualFee: real('annual_fee').default(0),
+  subscriptionStatus: text('subscription_status', {
+    enum: ['trial', 'active', 'expired', 'suspended'],
+  }).notNull().default('trial'),
+  subscriptionExpiresAt: integer('subscription_expires_at'),
   createdAt: integer('created_at').default(sql`(unixepoch())`),
   updatedAt: integer('updated_at').default(sql`(unixepoch())`),
 });
 
-// Classes table
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  schoolId: integer('school_id').references(() => schools.id),
+  username: text('username').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role', { enum: ['admin', 'super_admin'] }).notNull().default('admin'),
+  createdAt: integer('created_at').default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at').default(sql`(unixepoch())`),
+});
+
+export const teachers = sqliteTable('teachers', {
+  id: text('id').primaryKey(),
+  schoolId: integer('school_id').notNull(),
+  name: text('name').notNull(),
+  phone: text('phone'),
+  createdAt: integer('created_at').default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at').default(sql`(unixepoch())`),
+}, (table) => [
+  index('idx_teachers_school').on(table.schoolId),
+]);
+
 export const classes = sqliteTable('classes', {
   id: text('id').primaryKey(),
+  schoolId: integer('school_id').notNull(),
   name: text('name').notNull(),
   teacherId: text('teacher_id').notNull().references(() => teachers.id),
   createdAt: integer('created_at').default(sql`(unixepoch())`),
   updatedAt: integer('updated_at').default(sql`(unixepoch())`),
 }, (table) => [
+  index('idx_classes_school').on(table.schoolId),
   index('idx_classes_teacher_id').on(table.teacherId),
 ]);
 
-// Students table
 export const students = sqliteTable('students', {
   id: text('id').primaryKey(),
-  grNumber: text('gr_number').notNull().unique(),
+  schoolId: integer('school_id').notNull(),
+  grNumber: text('gr_number').notNull(),
   name: text('name').notNull(),
   parentName: text('parent_name').notNull(),
   phone: text('phone').notNull(),
@@ -42,15 +78,19 @@ export const students = sqliteTable('students', {
   createdAt: integer('created_at').default(sql`(unixepoch())`),
   updatedAt: integer('updated_at').default(sql`(unixepoch())`),
 }, (table) => [
+  index('idx_students_school').on(table.schoolId),
   index('idx_students_class_id').on(table.classId),
   index('idx_students_status').on(table.status),
+  uniqueIndex('idx_students_gr_school').on(table.schoolId, table.grNumber),
 ]);
 
-// Payments table
 export const payments = sqliteTable('payments', {
   id: text('id').primaryKey(),
+  schoolId: integer('school_id').notNull(),
   studentId: text('student_id').notNull().references(() => students.id),
-  feeType: text('fee_type', { enum: ['Monthly', 'Admission', 'Annual', 'Summer', 'Other'] }).notNull(),
+  feeType: text('fee_type', {
+    enum: ['Monthly', 'Admission', 'Annual', 'Summer', 'Other'],
+  }).notNull(),
   amount: real('amount').notNull(),
   date: text('date').notNull(),
   month: text('month'),
@@ -58,13 +98,14 @@ export const payments = sqliteTable('payments', {
   timestamp: integer('timestamp').notNull(),
   createdAt: integer('created_at').default(sql`(unixepoch())`),
 }, (table) => [
+  index('idx_payments_school').on(table.schoolId),
   index('idx_payments_student_id').on(table.studentId),
   index('idx_payments_date').on(table.date),
 ]);
 
-// Expenses table
 export const expenses = sqliteTable('expenses', {
   id: text('id').primaryKey(),
+  schoolId: integer('school_id').notNull(),
   category: text('category').notNull(),
   amount: real('amount').notNull(),
   date: text('date').notNull(),
@@ -72,24 +113,32 @@ export const expenses = sqliteTable('expenses', {
   timestamp: integer('timestamp').notNull(),
   createdAt: integer('created_at').default(sql`(unixepoch())`),
 }, (table) => [
+  index('idx_expenses_school').on(table.schoolId),
   index('idx_expenses_date').on(table.date),
 ]);
 
-// Config table (singleton - always id = 1)
+// config table kept for backward compatibility during Task 3 migration
 export const config = sqliteTable('config', {
   id: integer('id').primaryKey(),
   name: text('name').notNull().default('Madrassa Darul Uloom'),
   address: text('address').default(''),
   phone: text('phone').default(''),
   adminName: text('admin_name').default('Admin'),
-  adminPhones: text('admin_phones').default('[]'), // JSON string array
+  adminPhones: text('admin_phones').default('[]'),
   monthlyDueDate: integer('monthly_due_date').default(10),
-  annualFeeMonth: text('annual_fee_month', { enum: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'] }).default('05'),
+  annualFeeMonth: text('annual_fee_month', {
+    enum: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'],
+  }).default('05'),
   annualFee: real('annual_fee').default(0),
   updatedAt: integer('updated_at').default(sql`(unixepoch())`),
 });
 
-// Type exports for convenience
+export type School = typeof schools.$inferSelect;
+export type NewSchool = typeof schools.$inferInsert;
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+
 export type Teacher = typeof teachers.$inferSelect;
 export type NewTeacher = typeof teachers.$inferInsert;
 

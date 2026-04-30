@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq, inArray } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { type AppContext, PendingFeesSummary } from "../../types";
 import { createDb, payments, students } from "../../db";
 
@@ -51,13 +51,14 @@ export class PendingFees extends OpenAPIRoute {
     const month = data.query.month || currentMonth;
     const year = data.query.year || currentYear;
 
+    const schoolId = c.get('schoolId')!;
     const db = createDb(c.env.DB);
 
     // Fetch active students first
     const activeStudents = await db
       .select({ id: students.id })
       .from(students)
-      .where(eq(students.status, 'Active'));
+      .where(and(eq(students.status, 'Active'), eq(students.schoolId, schoolId)));
 
     const activeStudentIdsList = activeStudents.map(s => s.id);
 
@@ -69,7 +70,7 @@ export class PendingFees extends OpenAPIRoute {
           month: payments.month,
           date: payments.date,
         }).from(payments).where(
-          inArray(payments.studentId, activeStudentIdsList)
+          and(eq(payments.schoolId, schoolId), inArray(payments.studentId, activeStudentIdsList))
         )
       : [];
 

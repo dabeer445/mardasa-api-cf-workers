@@ -39,17 +39,17 @@ export async function paginate<T extends SQLiteTable>(
   const total = countResult?.count ?? 0;
 
   // Get paginated data
-  let dataQuery = db.select().from(table);
+  let dataQuery = db.select().from(table).$dynamic();
 
   if (options?.where) {
-    dataQuery = dataQuery.where(options.where) as typeof dataQuery;
+    dataQuery = dataQuery.where(options.where);
   }
 
   if (options?.orderBy) {
     if (options.orderDirection === 'asc') {
-      dataQuery = dataQuery.orderBy(options.orderBy) as typeof dataQuery;
+      dataQuery = dataQuery.orderBy(options.orderBy);
     } else {
-      dataQuery = dataQuery.orderBy(sql`${options.orderBy} DESC`) as typeof dataQuery;
+      dataQuery = dataQuery.orderBy(sql`${options.orderBy} DESC`);
     }
   }
 

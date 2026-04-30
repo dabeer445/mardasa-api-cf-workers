@@ -39,10 +39,12 @@ export class TeacherList extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { page, limit, search } = data.query;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
     const filter = createFilter()
+      .eq(teachers.schoolId, schoolId)
       .like(teachers.name, search)
       .build();
 

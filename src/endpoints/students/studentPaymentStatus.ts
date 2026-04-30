@@ -1,8 +1,8 @@
 import { Bool, OpenAPIRoute, Str, Num } from "chanfana";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
-import { type AppContext, StudentPaymentStatus as StudentPaymentStatusSchema, mapConfig } from "../../types";
-import { createDb, config, payments, students } from "../../db";
+import { type AppContext, StudentPaymentStatus as StudentPaymentStatusSchema, mapSchool } from "../../types";
+import { createDb, schools, payments, students } from "../../db";
 import { getMonthsInRange } from "../../services/duesCalculator";
 
 export class StudentPaymentStatus extends OpenAPIRoute {
@@ -52,17 +52,18 @@ export class StudentPaymentStatus extends OpenAPIRoute {
     const currentYear = new Date().toISOString().slice(0, 4);
     const year = data.query.year || currentYear;
     const yearNum = parseInt(year, 10);
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
     // Fetch student and their payments in parallel
-    const [student, studentPayments, configRow] = await Promise.all([
+    const [student, studentPayments, schoolRow] = await Promise.all([
       db.select({
         id: students.id,
         admissionDate: students.admissionDate,
         monthlyFee: students.monthlyFee,
         discount: students.discount,
-      }).from(students).where(eq(students.id, studentId)).get(),
+      }).from(students).where(and(eq(students.id, studentId), eq(students.schoolId, schoolId))).get(),
 
       db.select({
         id: payments.id,
@@ -70,16 +71,16 @@ export class StudentPaymentStatus extends OpenAPIRoute {
         month: payments.month,
         date: payments.date,
         amount: payments.amount,
-      }).from(payments).where(eq(payments.studentId, studentId)),
+      }).from(payments).where(and(eq(payments.studentId, studentId), eq(payments.schoolId, schoolId))),
 
-      db.select().from(config).where(eq(config.id, 1)).get(),
+      db.select().from(schools).where(eq(schools.id, schoolId)).get(),
     ]);
 
     if (!student) {
       return c.json({ success: false, error: 'Student not found' }, 404);
     }
 
-    const cfg = mapConfig(configRow);
+    const cfg = mapSchool(schoolRow);
     const netMonthlyFee = (student.monthlyFee ?? 0) - (student.discount ?? 0);
 
     // Determine date range for the year

@@ -2,7 +2,7 @@ import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { type AppContext } from "../../types";
-import { createDb, config } from "../../db";
+import { createDb, schools } from "../../db";
 import { createWhatsAppService } from "../../services/whatsapp";
 import { generateDailyReport, formatDailyReport } from "../../services/reports";
 
@@ -51,18 +51,19 @@ export class DailyReport extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const date = data.query.date || new Date().toISOString().split('T')[0];
     const shouldSend = data.query.send || false;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
-    const reportData = await generateDailyReport(db, date);
+    const reportData = await generateDailyReport(db, date, schoolId);
     const message = formatDailyReport(reportData);
 
     let sent = false;
     let sendResult: { total: number; sent: number; failed: number } | undefined;
 
     if (shouldSend) {
-      const configResult = await db.select().from(config).where(eq(config.id, 1)).get();
-      const adminPhones: string[] = configResult?.adminPhones
-        ? JSON.parse(configResult.adminPhones)
+      const schoolRow = await db.select().from(schools).where(eq(schools.id, schoolId)).get();
+      const adminPhones: string[] = schoolRow?.adminPhones
+        ? JSON.parse(schoolRow.adminPhones)
         : [];
       if (adminPhones.length > 0) {
         const whatsapp = createWhatsAppService(c.env);

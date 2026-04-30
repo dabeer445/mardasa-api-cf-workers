@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { type AppContext, Payment, generateId } from "../../types";
 import { createDb, payments, students } from "../../db";
 import { createNotificationService } from "../../services/notifications";
@@ -52,17 +52,19 @@ export class PaymentCreate extends OpenAPIRoute {
     const body = data.body;
     const id = generateId('p');
     const timestamp = body.timestamp ?? Date.now();
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
     // Validate student exists
-    const studentResult = await db.select().from(students).where(eq(students.id, body.studentId)).get();
+    const studentResult = await db.select().from(students).where(and(eq(students.id, body.studentId), eq(students.schoolId, schoolId))).get();
     if (!studentResult) {
       return c.json({ success: false, error: `Student with ID '${body.studentId}' not found` }, 400);
     }
 
     await db.insert(payments).values({
       id,
+      schoolId,
       studentId: body.studentId,
       feeType: body.feeType,
       amount: body.amount,
@@ -73,7 +75,7 @@ export class PaymentCreate extends OpenAPIRoute {
     });
 
     const payment = await db.select().from(payments).where(eq(payments.id, id)).get();
-    c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE));
+    c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE, schoolId));
 
     // Send payment notification in background (non-blocking)
     if (payment && studentResult.phone) {

@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { type AppContext, ClassRoom, generateId } from "../../types";
 import { createDb, classes, teachers } from "../../db";
 
@@ -47,12 +47,13 @@ export class ClassCreate extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const body = data.body;
     const id = generateId('c');
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
     // Validate teacher exists if provided
     if (body.teacherId) {
-      const teacher = await db.select().from(teachers).where(eq(teachers.id, body.teacherId)).get();
+      const teacher = await db.select().from(teachers).where(and(eq(teachers.id, body.teacherId), eq(teachers.schoolId, schoolId))).get();
       if (!teacher) {
         return c.json({ success: false, error: `Teacher with ID '${body.teacherId}' not found` }, 400);
       }
@@ -60,6 +61,7 @@ export class ClassCreate extends OpenAPIRoute {
 
     await db.insert(classes).values({
       id,
+      schoolId,
       name: body.name,
       teacherId: body.teacherId,
     });

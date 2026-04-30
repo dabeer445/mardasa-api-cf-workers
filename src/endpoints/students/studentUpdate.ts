@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { type AppContext, Student } from "../../types";
 import { createDb, students, classes } from "../../db";
 import { buildPartialUpdate } from "../../db/utils";
@@ -63,17 +63,18 @@ export class StudentUpdate extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
     const body = data.body;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
-    const existing = await db.select().from(students).where(eq(students.id, id)).get();
+    const existing = await db.select().from(students).where(and(eq(students.id, id), eq(students.schoolId, schoolId))).get();
     if (!existing) {
       return c.json({ success: false, error: 'Student not found' }, 404);
     }
 
     // Validate class exists if provided
     if (body.classId) {
-      const classResult = await db.select().from(classes).where(eq(classes.id, body.classId)).get();
+      const classResult = await db.select().from(classes).where(and(eq(classes.id, body.classId), eq(classes.schoolId, schoolId))).get();
       if (!classResult) {
         return c.json({ success: false, error: `Class with ID '${body.classId}' not found` }, 400);
       }
@@ -88,13 +89,13 @@ export class StudentUpdate extends OpenAPIRoute {
     await db
       .update(students)
       .set({ ...updates, updatedAt: sql`unixepoch()` })
-      .where(eq(students.id, id));
+      .where(and(eq(students.id, id), eq(students.schoolId, schoolId)));
 
-    const result = await db.select().from(students).where(eq(students.id, id)).get();
+    const result = await db.select().from(students).where(and(eq(students.id, id), eq(students.schoolId, schoolId))).get();
 
     // Invalidate dues cache if status changed (affects active student list)
     if (body.status) {
-      c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE));
+      c.executionCtx.waitUntil(invalidateDuesCache(c.env.CACHE, schoolId));
     }
 
     return {

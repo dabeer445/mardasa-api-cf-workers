@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { type AppContext, Payment } from "../../types";
 import { createDb, payments } from "../../db";
 
@@ -31,12 +31,13 @@ export class PaymentsByStudent extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { studentId } = data.params;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
     const results = await db
       .select()
       .from(payments)
-      .where(eq(payments.studentId, studentId))
+      .where(and(eq(payments.studentId, studentId), eq(payments.schoolId, schoolId)))
       .orderBy(desc(payments.timestamp));
 
     return {

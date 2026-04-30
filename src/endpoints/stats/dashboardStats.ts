@@ -1,13 +1,13 @@
 import { Bool, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { eq, count, like } from "drizzle-orm";
+import { eq, and, count, like } from "drizzle-orm";
 import {
   type AppContext,
   DashboardStats as DashboardStatsSchema,
-  mapConfig,
+  mapSchool,
   DUES_START_DATE,
 } from "../../types";
-import { createDb, config, payments, students } from "../../db";
+import { createDb, schools, payments, students } from "../../db";
 import {
   calculateAllStudentDues,
   getDefaulters,
@@ -34,6 +34,7 @@ export class DashboardStats extends OpenAPIRoute {
   };
 
   async handle(c: AppContext) {
+    const schoolId = c.get('schoolId')!;
     const db = createDb(c.env.DB);
     const today = new Date().toISOString().slice(0, 10);
     const currentMonth = today.slice(0, 7);
@@ -45,30 +46,28 @@ export class DashboardStats extends OpenAPIRoute {
       todayPayments,
       newAdmissionsResult,
       activeStudentsForDues,
-      configRow,
+      schoolRow,
     ] = await Promise.all([
       // Total students count
-      db.select({ count: count() }).from(students),
+      db.select({ count: count() }).from(students).where(eq(students.schoolId, schoolId)),
 
       // Active students count
       db
         .select({ count: count() })
         .from(students)
-        .where(eq(students.status, "Active")),
+        .where(and(eq(students.status, "Active"), eq(students.schoolId, schoolId))),
 
       // Today's payments
       db
-        .select({
-          amount: payments.amount,
-        })
+        .select({ amount: payments.amount })
         .from(payments)
-        .where(eq(payments.date, today)),
+        .where(and(eq(payments.date, today), eq(payments.schoolId, schoolId))),
 
       // New admissions this month
       db
         .select({ count: count() })
         .from(students)
-        .where(like(students.admissionDate, `${currentMonth}%`)),
+        .where(and(eq(students.schoolId, schoolId), like(students.admissionDate, `${currentMonth}%`))),
 
       // Active students for dues calculation
       db
@@ -79,15 +78,15 @@ export class DashboardStats extends OpenAPIRoute {
           discount: students.discount,
         })
         .from(students)
-        .where(eq(students.status, "Active")),
+        .where(and(eq(students.status, "Active"), eq(students.schoolId, schoolId))),
 
-      // Config
-      db.select().from(config).where(eq(config.id, 1)).get(),
+      // School config
+      db.select().from(schools).where(eq(schools.id, schoolId)).get(),
     ]);
 
-    const relevantPayments = await fetchDuesPayments(db, DUES_START_DATE, c.env.CACHE);
+    const relevantPayments = await fetchDuesPayments(db, DUES_START_DATE, c.env.CACHE, schoolId);
 
-    const cfg = mapConfig(configRow);
+    const cfg = mapSchool(schoolRow);
 
     // Calculate today's collection
     const todayCollection = todayPayments.reduce(

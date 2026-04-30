@@ -14,20 +14,38 @@ import { DashboardStats } from "./endpoints/stats/dashboardStats";
 import { PendingFees } from "./endpoints/payments/pendingFees";
 import { StudentPaymentStatus } from "./endpoints/students/studentPaymentStatus";
 import { NotificationSend } from "./endpoints/notifications";
+import { Login } from "./endpoints/auth/login";
+import { AdminSchoolList, AdminSchoolCreate, AdminSchoolFetch, AdminSchoolUpdate } from "./endpoints/admin";
+import { AdminUserList, AdminUserCreate } from "./endpoints/admin";
+import { AdminStats } from "./endpoints/admin";
+import { requireAdmin, requireSuperAdmin } from "./middleware/auth";
 import { scheduled } from "./scheduled";
 
-import type { Env } from "./types";
+import type { Env, Variables } from "./types";
 
-// Start a Hono app
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-// Enable CORS
 app.use("/*", cors());
 
-// Setup OpenAPI registry
+// Auth middleware — applied before routes are registered so chanfana doesn't see it
+app.use("/api/*", requireAdmin);
+app.use("/admin/*", requireSuperAdmin);
+
 const openapi = fromHono(app, {
 	docs_url: "/",
 });
+
+// Auth (public)
+openapi.post("/auth/login", Login);
+
+// Admin routes (super_admin only)
+openapi.get("/admin/schools", AdminSchoolList);
+openapi.post("/admin/schools", AdminSchoolCreate);
+openapi.get("/admin/schools/:id", AdminSchoolFetch);
+openapi.put("/admin/schools/:id", AdminSchoolUpdate);
+openapi.get("/admin/stats", AdminStats);
+openapi.get("/admin/users", AdminUserList);
+openapi.post("/admin/users", AdminUserCreate);
 
 // State endpoint
 openapi.get("/api/state", StateFetch);
@@ -91,7 +109,6 @@ openapi.post("/api/notifications/send", NotificationSend);
 // Utility routes
 openapi.delete("/api/clear", ClearAll);
 
-// Export the Hono app and scheduled handler
 export default {
   fetch: app.fetch,
   scheduled,

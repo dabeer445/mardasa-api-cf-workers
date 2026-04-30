@@ -1,8 +1,8 @@
 import { Bool, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { type AppContext } from "../../types";
-import { createDb, students, classes, teachers, payments, expenses, config } from "../../db";
+import { createDb, students, classes, teachers, payments, expenses } from "../../db";
 
 export class ClearAll extends OpenAPIRoute {
   schema = {
@@ -23,29 +23,15 @@ export class ClearAll extends OpenAPIRoute {
   };
 
   async handle(c: AppContext) {
+    const schoolId = c.get('schoolId')!;
     const db = createDb(c.env.DB);
 
-    // Delete all data in correct order (respecting foreign keys)
-    await db.delete(payments);
-    await db.delete(expenses);
-    await db.delete(students);
-    await db.delete(classes);
-    await db.delete(teachers);
-
-    // Reset config to defaults
-    await db
-      .update(config)
-      .set({
-        name: 'Madrassa Darul Uloom',
-        address: '',
-        phone: '',
-        adminName: 'Admin',
-        adminPhones: '[]',
-        monthlyDueDate: 10,
-        annualFeeMonth: '05',
-        annualFee: 0,
-      })
-      .where(eq(config.id, 1));
+    // Delete school's data in correct order (respecting foreign keys)
+    await db.delete(payments).where(eq(payments.schoolId, schoolId));
+    await db.delete(expenses).where(eq(expenses.schoolId, schoolId));
+    await db.delete(students).where(eq(students.schoolId, schoolId));
+    await db.delete(classes).where(eq(classes.schoolId, schoolId));
+    await db.delete(teachers).where(eq(teachers.schoolId, schoolId));
 
     return {
       success: true,

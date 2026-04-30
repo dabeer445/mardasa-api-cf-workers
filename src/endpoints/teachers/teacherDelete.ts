@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { type AppContext } from "../../types";
 import { createDb, teachers } from "../../db";
 
@@ -30,9 +30,10 @@ export class TeacherDelete extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
-    await db.delete(teachers).where(eq(teachers.id, id));
+    await db.delete(teachers).where(and(eq(teachers.id, id), eq(teachers.schoolId, schoolId)));
 
     return {
       success: true,

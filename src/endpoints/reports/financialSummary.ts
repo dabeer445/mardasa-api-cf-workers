@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { and, gte, lte } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { type AppContext, FinancialSummary as FinancialSummarySchema } from "../../types";
 import { createDb, payments, expenses } from "../../db";
 
@@ -32,6 +32,7 @@ export class FinancialSummary extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { startDate, endDate } = data.query;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
@@ -41,14 +42,14 @@ export class FinancialSummary extends OpenAPIRoute {
         feeType: payments.feeType,
         amount: payments.amount,
       }).from(payments).where(
-        and(gte(payments.date, startDate), lte(payments.date, endDate))
+        and(eq(payments.schoolId, schoolId), gte(payments.date, startDate), lte(payments.date, endDate))
       ),
 
       db.select({
         category: expenses.category,
         amount: expenses.amount,
       }).from(expenses).where(
-        and(gte(expenses.date, startDate), lte(expenses.date, endDate))
+        and(eq(expenses.schoolId, schoolId), gte(expenses.date, startDate), lte(expenses.date, endDate))
       ),
     ]);
 

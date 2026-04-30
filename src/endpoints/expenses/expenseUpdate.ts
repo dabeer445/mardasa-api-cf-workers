@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { type AppContext, Expense } from "../../types";
 import { createDb, expenses } from "../../db";
 import { buildPartialUpdate } from "../../db/utils";
@@ -51,10 +51,11 @@ export class ExpenseUpdate extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
     const body = data.body;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
-    const existing = await db.select().from(expenses).where(eq(expenses.id, id)).get();
+    const existing = await db.select().from(expenses).where(and(eq(expenses.id, id), eq(expenses.schoolId, schoolId))).get();
     if (!existing) {
       return c.json({ success: false, error: 'Expense not found' }, 404);
     }
@@ -64,9 +65,9 @@ export class ExpenseUpdate extends OpenAPIRoute {
     await db
       .update(expenses)
       .set(updates)
-      .where(eq(expenses.id, id));
+      .where(and(eq(expenses.id, id), eq(expenses.schoolId, schoolId)));
 
-    const result = await db.select().from(expenses).where(eq(expenses.id, id)).get();
+    const result = await db.select().from(expenses).where(and(eq(expenses.id, id), eq(expenses.schoolId, schoolId))).get();
     return {
       success: true,
       result,

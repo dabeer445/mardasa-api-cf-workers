@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { type AppContext, Teacher } from "../../types";
 import { createDb, teachers } from "../../db";
 
@@ -42,9 +42,10 @@ export class TeacherFetch extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
-    const result = await db.select().from(teachers).where(eq(teachers.id, id)).get();
+    const result = await db.select().from(teachers).where(and(eq(teachers.id, id), eq(teachers.schoolId, schoolId))).get();
 
     if (!result) {
       return c.json({ success: false, error: 'Teacher not found' }, 404);

@@ -41,10 +41,12 @@ export class StudentList extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { page, limit, status, classId, search } = data.query;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
     const filter = createFilter()
+      .eq(students.schoolId, schoolId)
       .eq(students.status, status)
       .eq(students.classId, classId)
       .search([students.name, students.grNumber], search)

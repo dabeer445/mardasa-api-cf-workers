@@ -8,10 +8,10 @@ import {
   Teacher,
   Payment,
   Expense,
-  MadrassaConfig,
-  mapConfig,
+  School,
+  mapSchool,
 } from "../../types";
-import { createDb, students, classes, teachers, payments, expenses, config } from "../../db";
+import { createDb, students, classes, teachers, payments, expenses, schools } from "../../db";
 
 export class StateFetch extends OpenAPIRoute {
   schema = {
@@ -28,7 +28,7 @@ export class StateFetch extends OpenAPIRoute {
               teachers: Teacher.array(),
               payments: Payment.array(),
               expenses: Expense.array(),
-              config: MadrassaConfig,
+              config: School,
             }),
           },
         },
@@ -37,15 +37,16 @@ export class StateFetch extends OpenAPIRoute {
   };
 
   async handle(c: AppContext) {
+    const schoolId = c.get('schoolId')!;
     const db = createDb(c.env.DB);
 
-    const [studentsResult, classesResult, teachersResult, paymentsResult, expensesResult, configResult] = await Promise.all([
-      db.select().from(students),
-      db.select().from(classes),
-      db.select().from(teachers),
-      db.select().from(payments),
-      db.select().from(expenses),
-      db.select().from(config).where(eq(config.id, 1)).get(),
+    const [studentsResult, classesResult, teachersResult, paymentsResult, expensesResult, schoolRow] = await Promise.all([
+      db.select().from(students).where(eq(students.schoolId, schoolId)),
+      db.select().from(classes).where(eq(classes.schoolId, schoolId)),
+      db.select().from(teachers).where(eq(teachers.schoolId, schoolId)),
+      db.select().from(payments).where(eq(payments.schoolId, schoolId)),
+      db.select().from(expenses).where(eq(expenses.schoolId, schoolId)),
+      db.select().from(schools).where(eq(schools.id, schoolId)).get(),
     ]);
 
     return {
@@ -54,7 +55,7 @@ export class StateFetch extends OpenAPIRoute {
       teachers: teachersResult,
       payments: paymentsResult,
       expenses: expensesResult,
-      config: mapConfig(configResult),
+      config: mapSchool(schoolRow),
     };
   }
 }

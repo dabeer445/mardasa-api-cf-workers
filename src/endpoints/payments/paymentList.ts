@@ -43,10 +43,12 @@ export class PaymentList extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { page, limit, studentId, feeType, month, fromDate, toDate } = data.query;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
     const filter = createFilter()
+      .eq(payments.schoolId, schoolId)
       .eq(payments.studentId, studentId)
       .eq(payments.feeType, feeType)
       .eq(payments.month, month)

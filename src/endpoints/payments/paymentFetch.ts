@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { type AppContext, Payment } from "../../types";
 import { createDb, payments } from "../../db";
 
@@ -42,9 +42,10 @@ export class PaymentFetch extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { id } = data.params;
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
-    const result = await db.select().from(payments).where(eq(payments.id, id)).get();
+    const result = await db.select().from(payments).where(and(eq(payments.id, id), eq(payments.schoolId, schoolId))).get();
 
     if (!result) {
       return c.json({ success: false, error: 'Payment not found' }, 404);

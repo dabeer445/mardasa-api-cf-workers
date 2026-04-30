@@ -205,8 +205,9 @@ const DUES_CACHE_TTL = 36000; // 10 hours (safety net; cache is invalidated on m
  * Also filters by duesStartDate and fee types (Monthly/Annual).
  * Results are cached in KV for 5 minutes.
  */
-export async function fetchDuesPayments(db: Database, duesStartDate: string, cache: KVNamespace) {
-  return withKVCache(cache, DUES_CACHE_KEY, DUES_CACHE_TTL, () =>
+export async function fetchDuesPayments(db: Database, duesStartDate: string, cache: KVNamespace, schoolId: number) {
+  const cacheKey = `${DUES_CACHE_KEY}-${schoolId}`;
+  return withKVCache(cache, cacheKey, DUES_CACHE_TTL, () =>
     db
       .select({
         studentId: payments.studentId,
@@ -219,6 +220,8 @@ export async function fetchDuesPayments(db: Database, duesStartDate: string, cac
       .innerJoin(students, eq(payments.studentId, students.id))
       .where(
         and(
+          eq(students.schoolId, schoolId),
+          eq(payments.schoolId, schoolId),
           eq(students.status, 'Active'),
           gte(payments.date, duesStartDate),
           inArray(payments.feeType, ['Monthly', 'Annual'])
@@ -227,6 +230,6 @@ export async function fetchDuesPayments(db: Database, duesStartDate: string, cac
   );
 }
 
-export async function invalidateDuesCache(cache: KVNamespace) {
-  await invalidateCache(cache, DUES_CACHE_KEY);
+export async function invalidateDuesCache(cache: KVNamespace, schoolId: number) {
+  await invalidateCache(cache, `${DUES_CACHE_KEY}-${schoolId}`);
 }

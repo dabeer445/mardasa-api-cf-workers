@@ -61,6 +61,9 @@ web_modules/
 
 \*.tsbuildinfo
 
+# TypeScript compiled output (src is TS-only, compiled by wrangler/esbuild)
+src/**/*.js
+
 # Optional npm cache directory
 
 .npm
@@ -170,5 +173,8 @@ wrangler.jsonc
 
 # Raw data
 raw_data/
+
+# Database backups
+backups/
 
 .DS_Store

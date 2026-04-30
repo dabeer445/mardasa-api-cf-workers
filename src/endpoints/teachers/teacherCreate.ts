@@ -36,11 +36,13 @@ export class TeacherCreate extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const body = data.body;
     const id = generateId('t');
+    const schoolId = c.get('schoolId')!;
 
     const db = createDb(c.env.DB);
 
     await db.insert(teachers).values({
       id,
+      schoolId,
       name: body.name,
       phone: body.phone ?? null,
     });
