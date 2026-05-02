@@ -27,9 +27,6 @@ export type Env = {
   CACHE: KVNamespace;
   BUCKET: R2Bucket;
   JWT_SECRET: string;
-  WHATSAPP_API_URL?: string;
-  WHATSAPP_API_KEY?: string;
-  WHATSAPP_SESSION?: string;
 };
 
 export type Variables = {

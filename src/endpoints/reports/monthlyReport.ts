@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq, and, gte, lte, count } from "drizzle-orm";
 import { type AppContext } from "../../types";
 import { createDb, schools, payments, expenses, students } from "../../db";
-import { createWhatsAppService } from "../../services/whatsapp";
+import { WhatsAppService } from "../../services/whatsapp";
 import { generateMonthlyReport, formatMonthlyReport } from "../../services/reports";
 
 export class MonthlyReport extends OpenAPIRoute {
@@ -124,8 +124,8 @@ export class MonthlyReport extends OpenAPIRoute {
         ? JSON.parse(schoolRow.adminPhones)
         : [];
 
-      if (adminPhones.length > 0) {
-        const whatsapp = createWhatsAppService(c.env);
+      if (adminPhones.length > 0 && schoolRow?.whatsappSessionId && schoolRow?.whatsappToken) {
+        const whatsapp = new WhatsAppService(schoolRow.whatsappSessionId, schoolRow.whatsappToken);
         sendResult = await whatsapp.sendToMultiple(adminPhones, message);
         sent = sendResult.sent > 0;
       }

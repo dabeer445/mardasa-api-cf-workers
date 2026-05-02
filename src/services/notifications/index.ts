@@ -1,7 +1,7 @@
 import type { Env } from '../../types';
-import { createDb, config } from '../../db';
+import { createDb, schools } from '../../db';
 import { eq } from 'drizzle-orm';
-import { createWhatsAppService } from '../whatsapp';
+import { WhatsAppService } from '../whatsapp';
 import type { NotificationEvent, NotificationData } from './events';
 import {
   formatStudentCreated,
@@ -18,28 +18,37 @@ export interface NotificationResult {
 }
 
 export class NotificationService {
-  private env: Env;
-  private madrassaName: string | null = null;
+  constructor(
+    private env: Env,
+    private schoolId: number,
+  ) {}
 
-  constructor(env: Env) {
-    this.env = env;
-  }
-
-  private async getMadrassaName(): Promise<string> {
-    if (this.madrassaName) return this.madrassaName;
-
+  private async getSchoolCredentials() {
     const db = createDb(this.env.DB);
-    const configResult = await db.select({ name: config.name }).from(config).where(eq(config.id, 1)).get();
-    this.madrassaName = configResult?.name || 'Madrassa';
-    return this.madrassaName;
+    return db
+      .select({
+        name: schools.name,
+        whatsappSessionId: schools.whatsappSessionId,
+        whatsappToken: schools.whatsappToken,
+      })
+      .from(schools)
+      .where(eq(schools.id, this.schoolId))
+      .get();
   }
 
   async trigger<E extends NotificationEvent>(
     event: E,
-    data: NotificationData[E]
+    data: NotificationData[E],
   ): Promise<NotificationResult> {
-    const madrassaName = await this.getMadrassaName();
-    const whatsapp = createWhatsAppService(this.env);
+    const school = await this.getSchoolCredentials();
+
+    if (!school?.whatsappSessionId || !school?.whatsappToken) {
+      console.warn(`School ${this.schoolId} has no WhatsApp credentials, skipping notification`);
+      return { success: false, sent: 0, failed: 0, message: 'No WhatsApp credentials' };
+    }
+
+    const whatsapp = new WhatsAppService(school.whatsappSessionId, school.whatsappToken);
+    const madrassaName = school.name;
 
     let message: string;
     let phones: string[];
@@ -77,29 +86,18 @@ export class NotificationService {
         return { success: false, sent: 0, failed: 0, message: 'Unknown event type' };
     }
 
-    if (phones.length === 0) {
-      return { success: false, sent: 0, failed: 0, message: 'No phone numbers provided' };
-    }
-
-    // Filter out empty phone numbers
-    const validPhones = phones.filter(p => p && p.trim() !== '');
+    const validPhones = phones.filter(p => p?.trim());
     if (validPhones.length === 0) {
       return { success: false, sent: 0, failed: 0, message: 'No valid phone numbers' };
     }
 
     const result = await whatsapp.sendToMultiple(validPhones, message);
-
-    return {
-      success: result.sent > 0,
-      sent: result.sent,
-      failed: result.failed,
-      message,
-    };
+    return { success: result.sent > 0, sent: result.sent, failed: result.failed, message };
   }
 }
 
-export function createNotificationService(env: Env): NotificationService {
-  return new NotificationService(env);
+export function createNotificationService(env: Env, schoolId: number): NotificationService {
+  return new NotificationService(env, schoolId);
 }
 
 export * from './events';

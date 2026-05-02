@@ -79,7 +79,7 @@ export class PaymentCreate extends OpenAPIRoute {
 
     // Send payment notification in background (non-blocking)
     if (payment && studentResult.phone) {
-      const notifications = createNotificationService(c.env);
+      const notifications = createNotificationService(c.env, schoolId);
 
       c.executionCtx.waitUntil(
         notifications.trigger('PAYMENT_RECEIVED', {

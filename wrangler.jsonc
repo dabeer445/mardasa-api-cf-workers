@@ -43,9 +43,6 @@
 		},
 	],
 	"vars": {
-		"WHATSAPP_API_KEY": "dabeer445",
-		"WHATSAPP_API_URL": "https://waha.17042016.xyz",
-		"WHATSAPP_SESSION": "default",
 		"JWT_SECRET": "dev-secret-change-in-production"
 	},
 	/**

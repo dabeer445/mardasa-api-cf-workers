@@ -1,7 +1,9 @@
 import { Bool, OpenAPIRoute, Str, Num } from "chanfana";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { type AppContext } from "../../types";
-import { createWhatsAppService } from "../../services/whatsapp";
+import { createDb, schools } from "../../db";
+import { WhatsAppService } from "../../services/whatsapp";
 
 export class NotificationSend extends OpenAPIRoute {
   schema = {
@@ -66,7 +68,19 @@ export class NotificationSend extends OpenAPIRoute {
       return c.json({ success: false, error: "At least one phone number is required" }, 400);
     }
 
-    const whatsapp = createWhatsAppService(c.env);
+    const schoolId = c.get('schoolId')!;
+    const db = createDb(c.env.DB);
+    const schoolRow = await db
+      .select({ whatsappSessionId: schools.whatsappSessionId, whatsappToken: schools.whatsappToken })
+      .from(schools)
+      .where(eq(schools.id, schoolId))
+      .get();
+
+    if (!schoolRow?.whatsappSessionId || !schoolRow?.whatsappToken) {
+      return c.json({ success: false, error: "WhatsApp is not configured for this school" }, 400);
+    }
+
+    const whatsapp = new WhatsAppService(schoolRow.whatsappSessionId, schoolRow.whatsappToken);
     const result = await whatsapp.sendToMultiple(phoneList, message);
 
     return {

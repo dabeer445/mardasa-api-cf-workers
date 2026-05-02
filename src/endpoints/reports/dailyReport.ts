@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { type AppContext } from "../../types";
 import { createDb, schools } from "../../db";
-import { createWhatsAppService } from "../../services/whatsapp";
+import { WhatsAppService } from "../../services/whatsapp";
 import { generateDailyReport, formatDailyReport } from "../../services/reports";
 
 export class DailyReport extends OpenAPIRoute {
@@ -65,8 +65,8 @@ export class DailyReport extends OpenAPIRoute {
       const adminPhones: string[] = schoolRow?.adminPhones
         ? JSON.parse(schoolRow.adminPhones)
         : [];
-      if (adminPhones.length > 0) {
-        const whatsapp = createWhatsAppService(c.env);
+      if (adminPhones.length > 0 && schoolRow?.whatsappSessionId && schoolRow?.whatsappToken) {
+        const whatsapp = new WhatsAppService(schoolRow.whatsappSessionId, schoolRow.whatsappToken);
         sendResult = await whatsapp.sendToMultiple(adminPhones, message);
         sent = sendResult.sent > 0;
       }

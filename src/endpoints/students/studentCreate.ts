@@ -3,7 +3,6 @@ import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { type AppContext, Student, generateId } from "../../types";
 import { createDb, students, classes } from "../../db";
-import { createNotificationService } from "../../services/notifications";
 
 export class StudentCreate extends OpenAPIRoute {
   schema = {
@@ -85,7 +84,7 @@ export class StudentCreate extends OpenAPIRoute {
 
     // Send welcome notification in background (non-blocking)
     // if (student && student.phone) {
-    //   const notifications = createNotificationService(c.env);
+    //   const notifications = createNotificationService(c.env, schoolId);
 
     //   c.executionCtx.waitUntil(
     //     notifications.trigger('STUDENT_CREATED', {
