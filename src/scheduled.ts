@@ -13,6 +13,31 @@ import {
 
 const THIRTY_DAYS_S = 30 * 24 * 60 * 60;
 
+async function purgeOrphanedLogos(db: ReturnType<typeof createDb>, bucket: R2Bucket) {
+  // Include soft-deleted schools — their logos are retained until the school is purged
+  const rows = await db.select({ logoUrl: schools.logoUrl }).from(schools);
+  const referencedKeys = new Set<string>();
+  for (const { logoUrl } of rows) {
+    if (!logoUrl) continue;
+    const key = logoUrl.split('/assets/logos/')[1];
+    if (key) referencedKeys.add(key);
+  }
+
+  let cursor: string | undefined;
+  let deleted = 0;
+  do {
+    const listed: R2Objects = await bucket.list({ cursor, limit: 1000 });
+    const orphans = listed.objects.filter(o => !referencedKeys.has(o.key)).map(o => o.key);
+    if (orphans.length > 0) {
+      await Promise.all(orphans.map(key => bucket.delete(key)));
+      deleted += orphans.length;
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+
+  if (deleted > 0) console.log(`Purged ${deleted} orphaned logo(s) from R2`);
+}
+
 async function purgeExpiredSchools(db: ReturnType<typeof createDb>) {
   const cutoff = Math.floor(Date.now() / 1000) - THIRTY_DAYS_S;
   const expired = await db
@@ -64,8 +89,9 @@ export async function scheduled(
 
     const whatsapp = new WhatsAppService(school.whatsappSessionId, school.whatsappToken);
 
-    // Monthly report on 1st of month (for previous month)
+    // Monthly cleanup + report on 1st of month
     if (dayOfMonth === 1) {
+      await purgeOrphanedLogos(db, env.BUCKET);
       const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const month = lastMonth.toISOString().slice(0, 7);
       const reportData = await generateMonthlyReport(db, month, school.id);
