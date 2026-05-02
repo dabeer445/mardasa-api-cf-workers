@@ -1,7 +1,17 @@
 import { Bool, OpenAPIRoute, Str, Num } from "chanfana";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { type AppContext, School, mapSchool } from "../../types";
 import { createDb, schools } from "../../db";
+
+function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-");
+}
 
 export class AdminSchoolCreate extends OpenAPIRoute {
   schema = {
@@ -12,7 +22,6 @@ export class AdminSchoolCreate extends OpenAPIRoute {
         content: {
           "application/json": {
             schema: z.object({
-              slug: Str({ example: "darul-uloom" }),
               name: Str({ example: "Madrassa Darul Uloom" }),
               logoUrl: Str({ required: false }),
               address: Str({ required: false }),
@@ -46,10 +55,20 @@ export class AdminSchoolCreate extends OpenAPIRoute {
     const body = data.body;
 
     const db = createDb(c.env.DB);
+
+    const base = toSlug(body.name);
+    let slug = base;
+    let attempt = 1;
+    while (true) {
+      const existing = await db.select({ id: schools.id }).from(schools).where(eq(schools.slug, slug)).get();
+      if (!existing) break;
+      slug = `${base}-${++attempt}`;
+    }
+
     const [row] = await db
       .insert(schools)
       .values({
-        slug: body.slug,
+        slug,
         name: body.name,
         logoUrl: body.logoUrl ?? null,
         address: body.address ?? '',

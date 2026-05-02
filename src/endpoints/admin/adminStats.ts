@@ -1,6 +1,6 @@
 import { Bool, OpenAPIRoute, Num } from "chanfana";
 import { z } from "zod";
-import { count } from "drizzle-orm";
+import { count, sum, isNull } from "drizzle-orm";
 import { type AppContext } from "../../types";
 import { createDb, schools, students, payments, expenses } from "../../db";
 
@@ -19,7 +19,9 @@ export class AdminStats extends OpenAPIRoute {
                 totalSchools: Num(),
                 totalStudents: Num(),
                 totalPayments: Num(),
+                totalPaymentsAmount: Num(),
                 totalExpenses: Num(),
+                totalExpensesAmount: Num(),
               }),
             }),
           },
@@ -31,11 +33,11 @@ export class AdminStats extends OpenAPIRoute {
   async handle(c: AppContext) {
     const db = createDb(c.env.DB);
 
-    const [[schoolCount], [studentCount], [paymentCount], [expenseCount]] = await Promise.all([
+    const [[schoolCount], [studentCount], [paymentStats], [expenseStats]] = await Promise.all([
       db.select({ total: count() }).from(schools).all(),
       db.select({ total: count() }).from(students).all(),
-      db.select({ total: count() }).from(payments).all(),
-      db.select({ total: count() }).from(expenses).all(),
+      db.select({ total: count(), amount: sum(payments.amount) }).from(payments).all(),
+      db.select({ total: count(), amount: sum(expenses.amount) }).from(expenses).all(),
     ]);
 
     return c.json({
@@ -43,8 +45,10 @@ export class AdminStats extends OpenAPIRoute {
       result: {
         totalSchools: schoolCount.total,
         totalStudents: studentCount.total,
-        totalPayments: paymentCount.total,
-        totalExpenses: expenseCount.total,
+        totalPayments: paymentStats.total,
+        totalPaymentsAmount: Number(paymentStats.amount ?? 0),
+        totalExpenses: expenseStats.total,
+        totalExpensesAmount: Number(expenseStats.amount ?? 0),
       },
     });
   }

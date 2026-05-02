@@ -15,9 +15,9 @@ import { PendingFees } from "./endpoints/payments/pendingFees";
 import { StudentPaymentStatus } from "./endpoints/students/studentPaymentStatus";
 import { NotificationSend } from "./endpoints/notifications";
 import { Login } from "./endpoints/auth/login";
-import { AdminSchoolList, AdminSchoolCreate, AdminSchoolFetch, AdminSchoolUpdate } from "./endpoints/admin";
+import { AdminSchoolList, AdminSchoolCreate, AdminSchoolFetch, AdminSchoolUpdate, AdminSchoolDelete } from "./endpoints/admin";
 import { AdminUserList, AdminUserCreate } from "./endpoints/admin";
-import { AdminStats } from "./endpoints/admin";
+import { AdminStats, AdminUploadLogo } from "./endpoints/admin";
 import { requireAdmin, requireSuperAdmin } from "./middleware/auth";
 import { scheduled } from "./scheduled";
 
@@ -26,6 +26,15 @@ import type { Env, Variables } from "./types";
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 app.use("/*", cors());
+
+// Public: serve logos stored in R2
+app.get("/assets/logos/:file", async (c) => {
+  const obj = await c.env.BUCKET.get(c.req.param("file"));
+  if (!obj) return c.notFound();
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  return new Response(obj.body, { headers });
+});
 
 // Auth middleware — applied before routes are registered so chanfana doesn't see it
 app.use("/api/*", requireAdmin);
@@ -43,9 +52,11 @@ openapi.get("/admin/schools", AdminSchoolList);
 openapi.post("/admin/schools", AdminSchoolCreate);
 openapi.get("/admin/schools/:id", AdminSchoolFetch);
 openapi.put("/admin/schools/:id", AdminSchoolUpdate);
+openapi.delete("/admin/schools/:id", AdminSchoolDelete);
 openapi.get("/admin/stats", AdminStats);
 openapi.get("/admin/users", AdminUserList);
 openapi.post("/admin/users", AdminUserCreate);
+openapi.post("/admin/upload-logo", AdminUploadLogo);
 
 // State endpoint
 openapi.get("/api/state", StateFetch);

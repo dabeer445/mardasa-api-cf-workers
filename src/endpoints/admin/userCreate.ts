@@ -49,16 +49,24 @@ export class AdminUserCreate extends OpenAPIRoute {
     const db = createDb(c.env.DB);
     const passwordHash = await hashPassword(body.password);
 
-    const [user] = await db
-      .insert(users)
-      .values({
-        id: generateId('usr_'),
-        username: body.username,
-        passwordHash,
-        schoolId: body.schoolId ?? null,
-        role: body.role,
-      })
-      .returning();
+    let user: typeof users.$inferSelect;
+    try {
+      [user] = await db
+        .insert(users)
+        .values({
+          id: generateId('usr_'),
+          username: body.username,
+          passwordHash,
+          schoolId: body.schoolId ?? null,
+          role: body.role,
+        })
+        .returning();
+    } catch (e: any) {
+      if (e?.cause?.message?.includes("UNIQUE constraint failed: users.username")) {
+        return c.json({ success: false, error: "Username already exists" }, 409);
+      }
+      throw e;
+    }
 
     return c.json({
       success: true,

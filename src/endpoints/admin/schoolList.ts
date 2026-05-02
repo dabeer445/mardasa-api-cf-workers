@@ -1,8 +1,8 @@
 import { Bool, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { type AppContext, School } from "../../types";
+import { isNull } from "drizzle-orm";
+import { type AppContext, School, mapSchool } from "../../types";
 import { createDb, schools } from "../../db";
-import { mapSchool } from "../../types";
 
 export class AdminSchoolList extends OpenAPIRoute {
   schema = {
@@ -25,7 +25,7 @@ export class AdminSchoolList extends OpenAPIRoute {
 
   async handle(c: AppContext) {
     const db = createDb(c.env.DB);
-    const rows = await db.select().from(schools).all();
+    const rows = await db.select().from(schools).where(isNull(schools.deletedAt)).all();
     return c.json({ success: true, result: rows.map(mapSchool) });
   }
 }

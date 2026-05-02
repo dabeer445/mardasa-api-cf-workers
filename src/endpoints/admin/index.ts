@@ -2,6 +2,8 @@ export { AdminSchoolList } from './schoolList';
 export { AdminSchoolCreate } from './schoolCreate';
 export { AdminSchoolFetch } from './schoolFetch';
 export { AdminSchoolUpdate } from './schoolUpdate';
+export { AdminSchoolDelete } from './schoolDelete';
 export { AdminUserList } from './userList';
 export { AdminUserCreate } from './userCreate';
 export { AdminStats } from './adminStats';
+export { AdminUploadLogo } from './uploadLogo';

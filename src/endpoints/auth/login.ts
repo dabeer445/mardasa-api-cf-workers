@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { sign } from "hono/jwt";
 import { type AppContext } from "../../types";
-import { createDb, users } from "../../db";
+import { createDb, users, schools } from "../../db";
 import { verifyPassword } from "../../utils/password";
 
 const THIRTY_DAYS = 30 * 24 * 60 * 60;
@@ -61,6 +61,24 @@ export class Login extends OpenAPIRoute {
 
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
       return c.json({ error: 'Invalid credentials' }, 401);
+    }
+
+    if (user.role === 'admin' && user.schoolId !== null) {
+      const school = await db
+        .select()
+        .from(schools)
+        .where(eq(schools.id, user.schoolId))
+        .get();
+
+      if (!school || school.deletedAt !== null) {
+        return c.json({ error: 'School not found' }, 403);
+      }
+      if (school.subscriptionStatus === 'suspended') {
+        return c.json({ error: 'Account suspended. Please contact support.' }, 403);
+      }
+      if (school.subscriptionStatus === 'expired') {
+        return c.json({ error: 'Subscription expired. Please contact support.' }, 403);
+      }
     }
 
     const exp = Math.floor(Date.now() / 1000) + THIRTY_DAYS;

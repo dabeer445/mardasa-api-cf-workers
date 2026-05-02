@@ -1,22 +1,23 @@
-import { Bool, OpenAPIRoute, Num } from "chanfana";
+import { OpenAPIRoute, Num } from "chanfana";
 import { z } from "zod";
 import { eq, isNull, and } from "drizzle-orm";
-import { type AppContext, School, mapSchool } from "../../types";
+import { sql } from "drizzle-orm";
+import { type AppContext } from "../../types";
 import { createDb, schools } from "../../db";
 
-export class AdminSchoolFetch extends OpenAPIRoute {
+export class AdminSchoolDelete extends OpenAPIRoute {
   schema = {
     tags: ["Admin"],
-    summary: "Get a school by ID",
+    summary: "Soft-delete a school (permanently removed after 30 days)",
     request: {
       params: z.object({ id: Num() }),
     },
     responses: {
       "200": {
-        description: "School details",
+        description: "School scheduled for deletion",
         content: {
           "application/json": {
-            schema: z.object({ success: Bool(), result: School }),
+            schema: z.object({ success: z.boolean() }),
           },
         },
       },
@@ -34,13 +35,20 @@ export class AdminSchoolFetch extends OpenAPIRoute {
   async handle(c: AppContext) {
     const data = await this.getValidatedData<typeof this.schema>();
     const db = createDb(c.env.DB);
-    const row = await db
-      .select()
+
+    const school = await db
+      .select({ id: schools.id })
       .from(schools)
       .where(and(eq(schools.id, data.params.id), isNull(schools.deletedAt)))
       .get();
 
-    if (!row) return c.json({ error: 'School not found' }, 404);
-    return c.json({ success: true, result: mapSchool(row) });
+    if (!school) return c.json({ error: 'School not found' }, 404);
+
+    await db
+      .update(schools)
+      .set({ deletedAt: sql`(unixepoch())` })
+      .where(eq(schools.id, data.params.id));
+
+    return c.json({ success: true });
   }
 }
