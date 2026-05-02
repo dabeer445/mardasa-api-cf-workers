@@ -20,6 +20,7 @@ export const schools = sqliteTable('schools', {
     enum: ['trial', 'active', 'expired', 'suspended'],
   }).notNull().default('trial'),
   subscriptionExpiresAt: integer('subscription_expires_at'),
+  deletedAt: integer('deleted_at'),
   createdAt: integer('created_at').default(sql`(unixepoch())`),
   updatedAt: integer('updated_at').default(sql`(unixepoch())`),
 });

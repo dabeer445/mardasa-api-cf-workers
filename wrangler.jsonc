@@ -36,6 +36,12 @@
 			"0 11 1 * *"
 		]
 	},
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "madrasa-logos"
+		},
+	],
 	"vars": {
 		"WHATSAPP_API_KEY": "dabeer445",
 		"WHATSAPP_API_URL": "https://waha.17042016.xyz",

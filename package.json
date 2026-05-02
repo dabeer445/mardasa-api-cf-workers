@@ -9,6 +9,8 @@
     "cf-typegen": "wrangler types",
     "db:migrate:remote": "wrangler d1 execute madrasa-roza-tul-ilm --remote --file=./schema.sql",
     "db:migrate:local": "wrangler d1 execute madrasa-roza-tul-ilm --local --file=./schema.sql",
+    "db:migration:local": "wrangler d1 execute madrasa-roza-tul-ilm --local --file",
+    "db:migration:remote": "wrangler d1 execute madrasa-roza-tul-ilm --remote --file",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"

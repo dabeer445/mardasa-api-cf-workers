@@ -25,6 +25,7 @@ export type {
 export type Env = {
   DB: D1Database;
   CACHE: KVNamespace;
+  BUCKET: R2Bucket;
   JWT_SECRET: string;
   WHATSAPP_API_URL?: string;
   WHATSAPP_API_KEY?: string;
