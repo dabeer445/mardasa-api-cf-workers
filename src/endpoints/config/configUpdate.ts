@@ -12,7 +12,7 @@ export class ConfigUpdate extends OpenAPIRoute {
       body: {
         content: {
           "application/json": {
-            schema: School.omit({ id: true, slug: true, subscriptionStatus: true, subscriptionExpiresAt: true }).partial(),
+            schema: School.omit({ id: true, slug: true, subscriptionStatus: true, subscriptionExpiresAt: true, whatsappSessionId: true, whatsappToken: true }).partial(),
           },
         },
       },
@@ -45,8 +45,6 @@ export class ConfigUpdate extends OpenAPIRoute {
     if (body.address !== undefined)           updates.address = body.address;
     if (body.phone !== undefined)             updates.phone = body.phone;
     if (body.adminPhones !== undefined)       updates.adminPhones = JSON.stringify(body.adminPhones);
-    if (body.whatsappSessionId !== undefined) updates.whatsappSessionId = body.whatsappSessionId;
-    if (body.whatsappToken !== undefined)     updates.whatsappToken = body.whatsappToken;
     if (body.monthlyDueDate !== undefined)    updates.monthlyDueDate = body.monthlyDueDate;
     if (body.annualFeeMonth !== undefined)    updates.annualFeeMonth = body.annualFeeMonth;
     if (body.annualFee !== undefined)         updates.annualFee = body.annualFee;
